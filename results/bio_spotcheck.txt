@@ -1,0 +1,645 @@
+BIO conversion spot check - inspect these before training any tagger.
+Step 5.3 of PLAN.md.
+
+[train] 1. Changes in the plasma cortisol level were reported in a male patient with panic disorder during the period of low-dose alprazolam treatment (mean 0.62 +/- 0.15 mg/day) compared with during the period of high-dose period (mean 1.08 +/- 0.28 mg/day).
+
+    1            O
+    .            O
+    changes      B-EFFECT
+    in           I-EFFECT
+    the          I-EFFECT
+    plasma       I-EFFECT
+    cortisol     I-EFFECT
+    level        I-EFFECT
+    were         O
+    reported     O
+    in           O
+    a            O
+    male         O
+    patient      O
+    with         O
+    panic        O
+    disorder     O
+    during       O
+    the          O
+    period       O
+    of           O
+    low-dose     O
+    alprazolam   B-DRUG
+    treatment    O
+    (            O
+    mean         O
+    0            O
+    .            O
+    62           O
+    +            O
+    /            O
+    -            O
+    0.15 mg/day  O
+    )            O
+    compared     O
+    with         O
+    during       O
+    the          O
+    period       O
+    of           O
+    high-dose    O
+    period       O
+    (            O
+    mean         O
+    1            O
+    .            O
+    08           O
+    +            O
+    /            O
+    -            O
+    0.28 mg/day  O
+    )            O
+    .            O
+
+========================================================================
+
+[train] 2-Chloro-deoxyadenosine induces durable complete remission in Castleman's disease but may accelerate its transformation to non-Hodgkin's lymphoma.
+
+    2-chloro-deoxyadenosine  B-DRUG
+    induces                  O
+    durable                  O
+    complete                 O
+    remission                O
+    in                       O
+    castleman's              O
+    disease                  O
+    but                      O
+    may                      O
+    accelerate               O
+    its                      O
+    transformation           O
+    to                       O
+    non-hodgkin's            B-EFFECT
+    lymphoma                 I-EFFECT
+    .                        O
+
+========================================================================
+
+[train] 3. Thus, the decreased plasma cortisol level during alprazolam treatment of panic disorder was suggested to be caused not by symptom alleviation due to alprazolam but by alprazolam administration itself.
+
+    3               O
+    .               O
+    thus            O
+    ,               O
+    the             O
+    decreased       B-EFFECT
+    plasma          I-EFFECT
+    cortisol        I-EFFECT
+    level           I-EFFECT
+    during          O
+    alprazolam      B-DRUG
+    treatment       O
+    of              O
+    panic           O
+    disorder        O
+    was             O
+    suggested       O
+    to              O
+    be              O
+    caused          O
+    not             O
+    by              O
+    symptom         O
+    alleviation     O
+    due             O
+    to              O
+    alprazolam      B-DRUG
+    but             O
+    by              O
+    alprazolam      B-DRUG
+    administration  O
+    itself          O
+    .               O
+
+========================================================================
+
+[train] 46-year-old woman developed painful ulcers over her lower abdomen in the form of reticulate erythema after injecting interferon beta-1b subcutaneously for multiple sclerosis.
+
+    46-year-old     O
+    woman           O
+    developed       O
+    painful         B-EFFECT
+    ulcers          I-EFFECT
+    over            O
+    her             O
+    lower           O
+    abdomen         O
+    in              O
+    the             O
+    form            O
+    of              O
+    reticulate      B-EFFECT
+    erythema        I-EFFECT
+    after           O
+    injecting       O
+    interferon      B-DRUG
+    beta-1b         I-DRUG
+    subcutaneously  O
+    for             O
+    multiple        O
+    sclerosis       O
+    .               O
+
+========================================================================
+
+[train] 5-Fluorouracil cardiotoxicity complicating treatment of stage IIB cervical cancer--case report.
+
+    5-fluorouracil  B-DRUG
+    cardiotoxicity  B-EFFECT
+    complicating    O
+    treatment       O
+    of              O
+    stage           O
+    iib             O
+    cervical        O
+    cancer          O
+    -               O
+    -               O
+    case            O
+    report          O
+    .               O
+
+========================================================================
+
+[train] A 10-year-old asthmatic boy began to suffer from urticarial rash and moderately severe bronchospasm after 8 weeks' treatment with disodium cromoglycate.
+
+    a             O
+    10-year-old   O
+    asthmatic     O
+    boy           O
+    began         O
+    to            O
+    suffer        O
+    from          O
+    urticarial    B-EFFECT
+    rash          I-EFFECT
+    and           O
+    moderately    B-EFFECT
+    severe        I-EFFECT
+    bronchospasm  I-EFFECT
+    after         O
+    8             O
+    weeks         O
+    '             O
+    treatment     O
+    with          O
+    disodium      B-DRUG
+    cromoglycate  I-DRUG
+    .             O
+
+========================================================================
+
+[train] A 10-year-old boy with osteosarcoma and normal renal function manifested laboratory evidence of impending renal toxicity and extreme elevation of aspartate aminotrasferase and alanine aminotransferase within 2 hours after the completion of a 4-hour infusion of high-dose methotrexate (MTX) (12 g/m2), and went on to develop acute renal failure with life-threatening hyperkalemia 29 hours later.
+
+    a                 O
+    10-year-old       O
+    boy               O
+    with              O
+    osteosarcoma      O
+    and               O
+    normal            O
+    renal             O
+    function          O
+    manifested        O
+    laboratory        O
+    evidence          O
+    of                O
+    impending         O
+    renal             B-EFFECT
+    toxicity          I-EFFECT
+    and               O
+    extreme           O
+    elevation         B-EFFECT
+    of                I-EFFECT
+    aspartate         I-EFFECT
+    aminotrasferase   I-EFFECT
+    and               O
+    alanine           O
+    aminotransferase  O
+    within            O
+    2                 O
+    hours             O
+    after             O
+    the               O
+    completion        O
+    of                O
+    a                 O
+    4-hour            O
+    infusion          O
+    of                O
+    high-dose         O
+    methotrexate      B-DRUG
+    (                 O
+    MTX               B-DRUG
+    )                 O
+    (                 O
+    12 g/m2           O
+    )                 O
+    ,                 O
+    and               O
+    went              O
+    on                O
+    to                O
+    develop           O
+    acute             B-EFFECT
+    renal             I-EFFECT
+    failure           I-EFFECT
+    with              O
+    life-threatening  O
+    hyperkalemia      O
+    29                O
+    hours             O
+    later             O
+    .                 O
+
+========================================================================
+
+[train] A 10-year-old girl with Lennox-Gastaut syndrome who received intravenous lorazepam for atypical absence status seizures is reported.
+
+    a               O
+    10-year-old     O
+    girl            O
+    with            O
+    lennox-gastaut  O
+    syndrome        O
+    who             O
+    received        O
+    intravenous     O
+    lorazepam       B-DRUG
+    for             O
+    atypical        O
+    absence         O
+    status          O
+    seizures        B-EFFECT
+    is              O
+    reported        O
+    .               O
+
+========================================================================
+
+[train] A 12 year old patient with atrial flutter is presented, in whom intravenous adenosine was followed by acceleration of the heart rate to a potentially dangerous arrhythmia.
+
+    a             O
+    12            O
+    year          O
+    old           O
+    patient       O
+    with          O
+    atrial        O
+    flutter       O
+    is            O
+    presented     O
+    ,             O
+    in            O
+    whom          O
+    intravenous   O
+    adenosine     B-DRUG
+    was           O
+    followed      O
+    by            O
+    acceleration  B-EFFECT
+    of            I-EFFECT
+    the           I-EFFECT
+    heart         I-EFFECT
+    rate          I-EFFECT
+    to            O
+    a             O
+    potentially   O
+    dangerous     O
+    arrhythmia    B-EFFECT
+    .             O
+
+========================================================================
+
+[train] A 14-year-old female developed systemic lupus erythematosus (SLE)-like symptoms, rash, fever, leukopenia and positive anti-nuclear antibody (ANA) two weeks after administration of carbamazepine (CBZ; Tegretol) used against benign Rolandic epilepsy.
+
+    a               O
+    14-year-old     O
+    female          O
+    developed       O
+    systemic        O
+    lupus           O
+    erythematosus   O
+    (               O
+    SLE             O
+    )               O
+    -               O
+    like            O
+    symptoms        O
+    ,               O
+    rash            B-EFFECT
+    ,               O
+    fever           B-EFFECT
+    ,               O
+    leukopenia      B-EFFECT
+    and             O
+    positive        B-EFFECT
+    anti-nuclear    I-EFFECT
+    antibody        I-EFFECT
+    (               O
+    ana             O
+    )               O
+    two             O
+    weeks           O
+    after           O
+    administration  O
+    of              O
+    carbamazepine   B-DRUG
+    (               O
+    cbz             B-DRUG
+    ;               O
+    tegretol        B-DRUG
+    )               O
+    used            O
+    against         O
+    benign          O
+    rolandic        O
+    epilepsy        O
+    .               O
+
+========================================================================
+
+[train] A 14-year-old girl with newly diagnosed SLE developed a pruritic bullous eruption while on prednisone.
+
+    a            O
+    14-year-old  O
+    girl         O
+    with         O
+    newly        O
+    diagnosed    O
+    SLE          O
+    developed    O
+    a            O
+    pruritic     B-EFFECT
+    bullous      I-EFFECT
+    eruption     I-EFFECT
+    while        O
+    on           O
+    prednisone   B-DRUG
+    .            O
+
+========================================================================
+
+[train] A 15-kg weight gain developed in a patient during the third week of ibuprofen therapy.
+
+    a          O
+    15-kg      B-EFFECT
+    weight     I-EFFECT
+    gain       I-EFFECT
+    developed  O
+    in         O
+    a          O
+    patient    O
+    during     O
+    the        O
+    third      O
+    week       O
+    of         O
+    ibuprofen  B-DRUG
+    therapy    O
+    .          O
+
+========================================================================
+
+[train] A 15-year follow-up of phenytoin-induced unilateral gingival hyperplasia: a case report.
+
+    a                  O
+    15-year            O
+    follow-up          O
+    of                 O
+    phenytoin-induced  B-DRUG
+    unilateral         B-EFFECT
+    gingival           I-EFFECT
+    hyperplasia        I-EFFECT
+    :                  O
+    a                  O
+    case               O
+    report             O
+    .                  O
+
+========================================================================
+
+[train] A 16-year-old boy developed fever, generalized rigidity, leukocytosis, and increased serum transaminase and creatine kinase levels while receiving treatment with olanzapine and lithium.
+
+    a             O
+    16-year-old   O
+    boy           O
+    developed     O
+    fever         B-EFFECT
+    ,             O
+    generalized   B-EFFECT
+    rigidity      I-EFFECT
+    ,             O
+    leukocytosis  B-EFFECT
+    ,             O
+    and           O
+    increased     B-EFFECT
+    serum         I-EFFECT
+    transaminase  I-EFFECT
+    and           I-EFFECT
+    creatine      I-EFFECT
+    kinase        I-EFFECT
+    levels        O
+    while         O
+    receiving     O
+    treatment     O
+    with          O
+    olanzapine    B-DRUG
+    and           O
+    lithium       B-DRUG
+    .             O
+
+========================================================================
+
+[train] A 16-year-old white male with acute biphenotypic leukemia developed evidence of the eosinophilia myalgia syndrome associated with total parenteral nutritional support with solutions containing tryptophan, which were given during his initial induction chemotherapy and also after autologous marrow transplantation.
+
+    a                O
+    16-year-old      O
+    white            O
+    male             O
+    with             O
+    acute            O
+    biphenotypic     O
+    leukemia         O
+    developed        O
+    evidence         O
+    of               O
+    the              O
+    eosinophilia     B-EFFECT
+    myalgia          I-EFFECT
+    syndrome         I-EFFECT
+    associated       O
+    with             O
+    total            O
+    parenteral       O
+    nutritional      O
+    support          O
+    with             O
+    solutions        O
+    containing       O
+    tryptophan       B-DRUG
+    ,                O
+    which            O
+    were             O
+    given            O
+    during           O
+    his              O
+    initial          O
+    induction        O
+    chemotherapy     O
+    and              O
+    also             O
+    after            O
+    autologous       O
+    marrow           O
+    transplantation  O
+    .                O
+
+========================================================================
+
+[train] A 17-year-old boy with acute lymphoblastic leukemia developed acute renal failure within 48 h of an intravenous high-dose methotrexate (5 g/m2) infusion.
+
+    a              O
+    17-year-old    O
+    boy            O
+    with           O
+    acute          O
+    lymphoblastic  O
+    leukemia       O
+    developed      O
+    acute          B-EFFECT
+    renal          I-EFFECT
+    failure        I-EFFECT
+    within         O
+    48             O
+    h              O
+    of             O
+    an             O
+    intravenous    O
+    high-dose      O
+    methotrexate   B-DRUG
+    (              O
+    5 g/m2         O
+    )              O
+    infusion       O
+    .              O
+
+========================================================================
+
+[train] A 17-year-old female patient who had been taking oral minocycline (50 mg twice daily) for 3 weeks for acne developed an eruption that progressed to an exfoliative dermatitis.
+
+    a            O
+    17-year-old  O
+    female       O
+    patient      O
+    who          O
+    had          O
+    been         O
+    taking       O
+    oral         O
+    minocycline  B-DRUG
+    (            O
+    50 mg        O
+    twice        O
+    daily        O
+    )            O
+    for          O
+    3            O
+    weeks        O
+    for          O
+    acne         O
+    developed    O
+    an           O
+    eruption     B-EFFECT
+    that         O
+    progressed   O
+    to           O
+    an           O
+    exfoliative  B-EFFECT
+    dermatitis   I-EFFECT
+    .            O
+
+========================================================================
+
+[train] A 2-year-old mentally retarded boy with frontal lobe epilepsy presented with an episode that resembled heat stroke during the administration of zonisamide.
+
+    a               O
+    2-year-old      O
+    mentally        O
+    retarded        O
+    boy             O
+    with            O
+    frontal         O
+    lobe            O
+    epilepsy        O
+    presented       O
+    with            O
+    an              O
+    episode         O
+    that            O
+    resembled       O
+    heat            B-EFFECT
+    stroke          I-EFFECT
+    during          O
+    the             O
+    administration  O
+    of              O
+    zonisamide      B-DRUG
+    .               O
+
+========================================================================
+
+[train] A 21-year-old man with Tourette's syndrome, pedophilia, Asperger's syndrome, and multiple sclerosis experienced seizures after receiving therapy with interferon beta-1a.
+
+    a            O
+    21-year-old  O
+    man          O
+    with         O
+    tourette's   O
+    syndrome     O
+    ,            O
+    pedophilia   O
+    ,            O
+    asperger's   O
+    syndrome     O
+    ,            O
+    and          O
+    multiple     O
+    sclerosis    O
+    experienced  O
+    seizures     B-EFFECT
+    after        O
+    receiving    O
+    therapy      O
+    with         O
+    interferon   B-DRUG
+    beta-1a      I-DRUG
+    .            O
+
+========================================================================
+
+[train] A 21-year-old patient developed rhabdomyolysis during his nineteenth week of treatment with clozapine for drug-resistant schizophrenia.
+
+    a               O
+    21-year-old     O
+    patient         O
+    developed       O
+    rhabdomyolysis  B-EFFECT
+    during          O
+    his             O
+    nineteenth      O
+    week            O
+    of              O
+    treatment       O
+    with            O
+    clozapine       B-DRUG
+    for             O
+    drug-resistant  O
+    schizophrenia   O
+    .               O

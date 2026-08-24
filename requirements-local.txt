@@ -1,5 +1,7 @@
 # ADE-Sentinel — LOCAL environment (authoring, data prep, analysis, report).
 # No torch here: every neural run executes on Kaggle/Colab (PLAN F7).
+# gensim IS local: Word2Vec/FastText are CPU-only, so training them here
+# is both faster (8 cores vs Kaggle's 4 vCPU) and free of GPU quota.
 #
 # Install:
 #   python -m venv .venv
@@ -18,3 +20,4 @@ tqdm
 pytest
 seqeval
 kaggle
+gensim

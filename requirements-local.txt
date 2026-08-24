@@ -1,0 +1,19 @@
+# ADE-Sentinel — LOCAL environment (authoring, data prep, analysis, report).
+# No torch here: every neural run executes on Kaggle/Colab (PLAN F7).
+#
+# Install:
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements-local.txt
+#
+# Exact resolved versions are recorded in requirements-local.lock.txt.
+
+datasets
+pandas
+pyarrow
+scikit-learn
+numpy
+requests
+matplotlib
+tqdm
+pytest
+seqeval

@@ -1,0 +1,35 @@
+# ADE-Sentinel — REMOTE environment (Kaggle 2xT4 primary, Colab fallback).
+# Every neural run and the embedding training execute here.
+#
+# Kaggle and Colab base images already ship torch / transformers / datasets and
+# UPDATE THEM WITHOUT WARNING. Reinstalling torch on Kaggle is slow and can break
+# CUDA. So this file is split in two (PLAN F10):
+#
+#   GROUP A - pip install these yourself, pinned.
+#   GROUP B - do NOT install; RECORD the preinstalled version in results/runs.csv
+#             so a run stays reproducible even after the base image moves.
+#
+# First notebook cell:
+#   !pip install -q gensim==4.4.0 seqeval==1.2.2 pytorch-crf==0.7.2
+#   import torch, transformers, datasets, numpy
+#   print(torch.__version__, transformers.__version__, datasets.__version__,
+#         numpy.__version__, torch.cuda.device_count())
+#
+# Paste that printed line into the run row. It is the remote half of the
+# reproducibility record; the git commit hash is the local half.
+
+# ---------------- GROUP A: install, pinned ----------------
+gensim==4.4.0
+seqeval==1.2.2
+pytorch-crf==0.7.2
+
+# ---------------- GROUP B: record, do not install ----------------
+# torch                 (Kaggle preinstalled, CUDA-matched - never reinstall)
+# transformers          (Kaggle preinstalled)
+# datasets              (Kaggle preinstalled)
+# numpy                 (pinned by the base image; gensim 4.4.0 supports numpy 2.x)
+# scikit-learn          (Kaggle preinstalled)
+
+# NOTE ON GENSIM + NUMPY: gensim < 4.3.3 is incompatible with numpy 2.x. If the
+# base image ever pins numpy < 2 and gensim resolution fails, downgrade gensim
+# rather than touching numpy - numpy is load-bearing for torch on that image.

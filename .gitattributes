@@ -1,0 +1,4 @@
+# Kaggle and Colab are Linux; keep the repo LF-normalized so scripts cloned
+# there are not littered with CRLF.
+* text=auto eol=lf
+*.ipynb text eol=lf

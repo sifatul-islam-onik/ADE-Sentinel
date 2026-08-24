@@ -1,0 +1,2 @@
+timestamp,run_id,stage,model,embedding,seed,git_commit,git_dirty,dataset_version,device_count,per_device_batch,effective_batch,epochs,lr,macro_f1,entity_f1_strict,entity_f1_lenient,metrics_json,params_json,notes
+2026-08-24T08:06:09+00:00,0-selftest,0,selftest,none,42,unknown,0,,0,8,8,,,0.0,,,"{""macro_f1"": 0.0, ""note"": ""not a real result""}","{""purpose"": ""verify log_run plumbing""}",Phase 0.4 plumbing check. Delete this row before Phase 4.

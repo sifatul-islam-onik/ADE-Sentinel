@@ -1,0 +1,31 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# --- Large artefacts: these live in the versioned Kaggle Dataset, not git (PLAN F7) ---
+data/raw/*
+!data/raw/.gitkeep
+data/interim/*
+!data/interim/.gitkeep
+*.jsonl
+*.bin
+*.kv
+*.kv.vectors.npy
+*.npy
+*.pt
+*.ckpt
+*.safetensors
+/models/            # top-level artefact dir only; src/models/ is code
+
+# --- Frozen splits ARE committed on purpose (PLAN F7). Do not ignore data/splits/. ---
+
+# --- Local noise ---
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+kaggle.json
+.env

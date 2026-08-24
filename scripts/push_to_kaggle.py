@@ -10,7 +10,7 @@ embedding matrices. What does NOT go here: data/splits/, which is small enough
 to commit to git and is therefore reproduced by a clone.
 
 Prerequisites (MANUAL - see README):
-  1. pip install kaggle
+  1. pip install kaggle   (already in requirements-local.txt)
   2. Kaggle -> Settings -> API -> "Create New Token" -> kaggle.json
   3. Move it to  %USERPROFILE%\\.kaggle\\kaggle.json
   4. Set KAGGLE_USERNAME below or via the environment
@@ -56,15 +56,39 @@ def kaggle_username() -> str:
     return ""
 
 
-def check_cli() -> None:
-    if shutil.which("kaggle") is None:
-        sys.exit("kaggle CLI not found. Run:  pip install kaggle")
+def find_kaggle_cli() -> str:
+    """Locate the kaggle CLI.
+
+    `shutil.which` alone is not enough: running `.venv\\Scripts\\python script.py`
+    without activating the venv leaves the venv's Scripts directory off PATH, so
+    the CLI installed right next to the interpreter is invisible. Check there too.
+    `python -m kaggle` is not an option - the package ships no __main__.
+    """
+    found = shutil.which("kaggle")
+    if found:
+        return found
+
+    scripts_dir = Path(sys.executable).parent
+    for name in ("kaggle.exe", "kaggle"):
+        candidate = scripts_dir / name
+        if candidate.exists():
+            return str(candidate)
+
+    sys.exit(
+        "kaggle CLI not found. Install it into the environment you are running:\n"
+        f"  {sys.executable} -m pip install kaggle"
+    )
+
+
+def check_cli() -> str:
+    cli = find_kaggle_cli()
     cred = Path.home() / ".kaggle" / "kaggle.json"
     if not cred.exists() and not os.environ.get("KAGGLE_KEY"):
         sys.exit(
             f"No credentials at {cred}.\n"
             "Kaggle -> Settings -> API -> Create New Token, then move kaggle.json there."
         )
+    return cli
 
 
 def stage(user: str) -> int:
@@ -111,7 +135,7 @@ def main(argv: list[str] | None = None) -> int:
                     help="version note - make it specific, it is your provenance record")
     args = ap.parse_args(argv)
 
-    check_cli()
+    cli = check_cli()
     user = kaggle_username()
     if not user:
         sys.exit("Could not determine Kaggle username. Set KAGGLE_USERNAME.")
@@ -121,12 +145,12 @@ def main(argv: list[str] | None = None) -> int:
         sys.exit("\nNothing to upload yet. Run this after Phase 1.4 / Phase 3.")
 
     if args.init:
-        code = run(["kaggle", "datasets", "create", "-p", str(STAGING),
+        code = run([cli, "datasets", "create", "-p", str(STAGING),
                     "--dir-mode", "zip"])
         print("\nNOTE: new datasets are PUBLIC by default.")
         print("      Open the dataset on kaggle.com -> Settings -> set to Private.")
     else:
-        code = run(["kaggle", "datasets", "version", "-p", str(STAGING),
+        code = run([cli, "datasets", "version", "-p", str(STAGING),
                     "-m", args.message, "--dir-mode", "zip"])
 
     if code == 0:

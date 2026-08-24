@@ -3,6 +3,7 @@
 # Regenerate after any local dependency change.
 
 datasets==5.0.1
+kaggle==1.7.4.5
 matplotlib==3.10.9
 numpy==2.2.6
 pandas==2.3.3

@@ -29,3 +29,6 @@ data/interim/*
 Thumbs.db
 kaggle.json
 .env
+
+# Staging dir built by scripts/push_to_kaggle.py
+data/.kaggle_staging/

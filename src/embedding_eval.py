@@ -154,7 +154,11 @@ def neighbour_table(
     return "\n".join(lines)
 
 
-def coverage_table(models: dict[str, object], counts: Counter[str]) -> str:
+def coverage_table(
+    models: dict[str, object],
+    counts: Counter[str],
+    subword: set[str] | None = None,
+) -> str:
     """Markdown coverage table across embeddings (PRD 7.2).
 
     Reports the case-folded numbers as the headline and the exact-case numbers
@@ -162,7 +166,17 @@ def coverage_table(models: dict[str, object], counts: Counter[str]) -> str:
     baseline only *appears* to be missing because of our abbreviation
     protection - a confound of our own making, not a property of the baseline.
     See `lookup_key`.
+
+    SUBWORD MODELS ARE NOT COMPARABLE ON THIS METRIC. Names listed in `subword`
+    (FastText) are marked with a dagger. A FastText model synthesises a vector
+    for *any* string out of character n-grams, so `term in kv` is true by
+    construction and coverage is trivially 100%. Presenting that beside GloVe's
+    66% as though our model "won" would be a category error, and an examiner
+    would say so. What 100% actually means is that FastText has no OOV *by
+    design*; whether its vectors for rare words are any GOOD is a separate
+    question, answered by the neighbour table and by downstream F1.
     """
+    subword = subword or set()
     lines = [
         "| Embedding | Type coverage | Token coverage | Types known | Types OOV "
         "| Type coverage, exact case |",
@@ -171,12 +185,25 @@ def coverage_table(models: dict[str, object], counts: Counter[str]) -> str:
     for name, kv in models.items():
         c = coverage(counts, kv, case_fallback=True)
         strict = coverage(counts, kv, case_fallback=False)
+        mark = " †" if name in subword else ""
         lines.append(
-            f"| {name} | {c['type_coverage'] * 100:.2f}% | "
+            f"| {name}{mark} | {c['type_coverage'] * 100:.2f}% | "
             f"{c['token_coverage'] * 100:.2f}% | "
             f"{c['types_known']:,} | {c['types_total'] - c['types_known']:,} | "
             f"{strict['type_coverage'] * 100:.2f}% |"
         )
+
+    if subword:
+        lines += [
+            "",
+            "† Subword model. Coverage is **100% by construction, not by merit**: "
+            "FastText builds a vector for any string from character n-grams, so "
+            "membership is always true and this metric cannot distinguish it from a "
+            "model that genuinely knows the word. Do not read it as beating the "
+            "others here. Its real claim is that it has no OOV *by design*; whether "
+            "those synthesised vectors are useful is what the nearest-neighbour "
+            "table and the downstream F1 comparison actually test.",
+        ]
     return "\n".join(lines)
 
 

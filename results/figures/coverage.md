@@ -6,6 +6,9 @@ Measured over the deduplicated ADE corpus: 20,896 sentences, 373,201 tokens, 20,
 |---|---|---|---|---|---|
 | E1 GloVe (general) | 66.18% | 95.67% | 13,434 | 6,864 | 65.77% |
 | E2 Word2Vec (ours) | 79.86% | 98.31% | 16,210 | 4,088 | 79.86% |
+| E3 FastText (ours) † | 100.00% | 100.00% | 20,298 | 0 | 100.00% |
+
+† Subword model. Coverage is **100% by construction, not by merit**: FastText builds a vector for any string from character n-grams, so membership is always true and this metric cannot distinguish it from a model that genuinely knows the word. Do not read it as beating the others here. Its real claim is that it has no OOV *by design*; whether those synthesised vectors are useful is what the nearest-neighbour table and the downstream F1 comparison actually test.
 
 ## Reading this table
 

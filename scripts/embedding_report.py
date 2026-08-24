@@ -37,6 +37,11 @@ CANDIDATES = [
     ("E3 FastText (ours)", "ft.kv"),
 ]
 
+# Coverage is meaningless for subword models: FastText synthesises a vector for
+# any string, so membership is always true. Marked so the table cannot be
+# misread as FastText "winning" the coverage comparison.
+SUBWORD = {"E3 FastText (ours)"}
+
 
 def main() -> int:
     import pandas as pd
@@ -77,7 +82,7 @@ def main() -> int:
         f"{sum(counts.values()):,} tokens, {len(counts):,} distinct types, using the "
         "project's own tokenizer.",
         "",
-        coverage_table(models, counts),
+        coverage_table(models, counts, subword=SUBWORD),
         "",
         "## Reading this table",
         "",
@@ -144,6 +149,48 @@ def main() -> int:
         "**not in vocabulary** is a result, not a gap in the experiment: it is the "
         "strongest possible statement about coverage, and PRD 7.3 asks for at least one "
         "such probe.",
+        "",
+        "## What the three columns actually show",
+        "",
+        "**E1 GloVe** returns loosely topical words. For `hepatotoxicity` it offers "
+        "`side-effects`, `tardive`, `dyskinesia` - medical-sounding, but not the same "
+        "concept. It has no entry at all for much of the drug vocabulary.",
+        "",
+        "**E2 Word2Vec** returns *semantic* relatives, which is what a distributional "
+        "model is supposed to do:",
+        "",
+        "| Probe | E2 neighbours | Relationship |",
+        "|---|---|---|",
+        "| `doxorubicin` | adriamycin, epirubicin, anthracycline | brand synonym, sibling drug, drug class |",
+        "| `hepatotoxicity` | nephrotoxicity, cardiotoxicity | sibling organ toxicities |",
+        "| `withdrawal` | abstinence, discontinuation, naloxone-precipitated | clinically co-occurring concepts |",
+        "",
+        "**E3 FastText** returns *morphological* variants, and this is the finding the "
+        "PRD did not anticipate:",
+        "",
+        "| Probe | E3 neighbours | Relationship |",
+        "|---|---|---|",
+        "| `doxorubicin` | doxorubicine, doxorubicinol, doxorubicin-based | spelling and derivational variants |",
+        "| `hepatotoxicity` | hepatotoxicities, hepatoxicity, hepatotoxic | inflections and a misspelling |",
+        "| `withdrawal` | withdrawals, withdraw, **withdrawalpolicy** | string overlap, including a junk token |",
+        "",
+        "PRD 7.1 predicted that subword information would help on rare drug names, and "
+        "in one sense it does: FastText never fails to produce a vector, and it robustly "
+        "unifies spelling variants (`hepatoxicity`/`hepatotoxicity`, "
+        "`thrombocytopaenia`/`thrombocytopenia`), which is genuinely useful for a corpus "
+        "with inconsistent orthography.",
+        "",
+        "But the cost is visible. Character n-grams dominate the vector, so cosine "
+        "similarity largely measures *string* similarity - note the inflated scores "
+        "(0.92-0.98 for E3 against 0.58-0.69 for E2) and `withdrawalpolicy` surfacing as "
+        "a near-neighbour of `withdrawal`. E3 does not recover `adriamycin` for "
+        "`doxorubicin`, because a brand synonym shares no substring with its generic "
+        "name - and that is exactly the inference an ADE system needs.",
+        "",
+        "**So the ordering is not a single ranking.** E3 wins on robustness to unseen and "
+        "misspelled forms; E2 wins on semantic relatedness. Which matters more is settled "
+        "by downstream F1 (runs 3-6), not by this table - which is the reason the PRD "
+        "specifies three independent evidence types rather than one.",
         "",
     ]
     if missing:

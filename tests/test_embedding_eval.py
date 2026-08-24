@@ -197,3 +197,74 @@ def test_coverage_table_reports_both_case_columns():
     table = coverage_table({"GloVe": FakeKV({"hiv", "rash"})}, counts)
     assert "exact case" in table
     assert "100.00%" in table and "50.00%" in table
+
+
+# --------------------------------------------------------------------------
+# Embedding matrices - the shared-base invariant (step 3.6)
+# --------------------------------------------------------------------------
+
+class VecKV(FakeKV):
+    """FakeKV that also returns vectors."""
+
+    def __init__(self, vectors):
+        super().__init__(vectors.keys())
+        self._vectors = vectors
+
+    def __getitem__(self, key):
+        return self._vectors[key]
+
+
+def test_build_matrix_fills_only_covered_rows():
+    import numpy as np
+    from src.embedding_eval import build_matrix
+
+    index = {"<pad>": 0, "<unk>": 1, "aspirin": 2, "unknownword": 3}
+    base = np.ones((4, 3), dtype="float32")
+    kv = VecKV({"aspirin": np.array([9, 9, 9], dtype="float32")})
+
+    matrix, hits = build_matrix(index, base, kv, skip=("<pad>", "<unk>"))
+    assert hits == 1
+    assert np.allclose(matrix[2], [9, 9, 9])
+    assert np.allclose(matrix[3], [1, 1, 1])       # uncovered keeps the base
+
+
+def test_build_matrix_does_not_mutate_the_base():
+    """The base is reused for every representation; mutating it would corrupt
+    all matrices built after the first."""
+    import numpy as np
+    from src.embedding_eval import build_matrix
+
+    index = {"aspirin": 0}
+    base = np.zeros((1, 3), dtype="float32")
+    kv = VecKV({"aspirin": np.array([5, 5, 5], dtype="float32")})
+
+    build_matrix(index, base, kv)
+    assert np.allclose(base, 0.0)
+
+
+def test_uncovered_rows_match_across_representations():
+    """The invariant runs 3-6 depend on: uncovered rows must be identical, so the
+    only difference between matrices is the vectors themselves."""
+    import numpy as np
+    from src.embedding_eval import build_matrix
+
+    index = {"aspirin": 0, "rare_term": 1}
+    base = np.random.default_rng(42).uniform(-1, 1, (2, 3)).astype("float32")
+
+    m1, _ = build_matrix(index, base, VecKV({"aspirin": np.array([1, 1, 1], "float32")}))
+    m2, _ = build_matrix(index, base, VecKV({"aspirin": np.array([2, 2, 2], "float32")}))
+
+    assert not np.allclose(m1[0], m2[0])           # covered row differs
+    assert np.allclose(m1[1], m2[1])               # uncovered row identical
+
+
+def test_build_matrix_uses_case_fallback():
+    import numpy as np
+    from src.embedding_eval import build_matrix
+
+    index = {"HIV": 0}
+    base = np.zeros((1, 3), dtype="float32")
+    kv = VecKV({"hiv": np.array([7, 7, 7], dtype="float32")})
+
+    matrix, hits = build_matrix(index, base, kv)
+    assert hits == 1 and np.allclose(matrix[0], [7, 7, 7])

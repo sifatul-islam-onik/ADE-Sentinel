@@ -218,3 +218,28 @@ def task_token_counts(texts, tokenizer) -> Counter[str]:
         tokens, _ = tokenizer(text)
         counts.update(t for t in tokens if any(ch.isalnum() for ch in t))
     return counts
+
+
+def build_matrix(index: dict[str, int], base, kv, skip: tuple[str, ...] = ()):
+    """Fill a copy of `base` with vectors from `kv`, returning (matrix, hits).
+
+    `base` is shared across every representation on purpose. Drawing fresh noise
+    per matrix would leave E1's uncovered rows and E2's uncovered rows holding
+    DIFFERENT random values, so part of any downstream F1 difference would be
+    attributable to that noise rather than to the embeddings. Copying one seeded
+    base keeps uncovered rows byte-identical, which is what makes runs 3-6 a
+    clean single-variable ablation (PLAN F8).
+
+    Lookups use `lookup_key`, so an uncased baseline is treated the same way the
+    coverage table treats it.
+    """
+    matrix = base.copy()
+    hits = 0
+    for token, i in index.items():
+        if token in skip:
+            continue
+        resolved = lookup_key(token, kv)
+        if resolved is not None:
+            matrix[i] = kv[resolved]
+            hits += 1
+    return matrix, hits

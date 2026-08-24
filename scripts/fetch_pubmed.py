@@ -77,6 +77,21 @@ RETMAX = 9999             # max PMIDs one esearch may return
 SHARD_DIR = REPO_ROOT / "data" / "raw" / "pubmed_shards"
 DEFAULT_OUT = REPO_ROOT / "data" / "pubmed_corpus.jsonl"
 
+def _display(path: Path) -> str:
+    """Repo-relative path for logging, falling back to the absolute one.
+
+    `Path.relative_to` RAISES when the argument is outside the base or is
+    relative while the base is absolute. Calling it inside the final summary
+    meant a run that had already fetched and merged 159,975 abstracts still
+    exited with a traceback, losing the summary and the 100k floor check.
+    Never let a formatting call fail after the real work has succeeded.
+    """
+    try:
+        return str(path.resolve().relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
+
+
 def api_key() -> str:
     """Read the key on every call, not once at import.
 
@@ -305,7 +320,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"date range : {args.min_year}/01/01 - {args.max_year}/12/31")
     print(f"per-year   : {args.cap:,} abstracts" if args.cap else "per-year   : uncapped")
     print(f"api key    : {'yes (10 req/s)' if api_key() else 'no (3 req/s) - see NCBI_API_KEY'}")
-    print(f"shards     : {SHARD_DIR.relative_to(REPO_ROOT)}")
+    print(f"shards     : {_display(SHARD_DIR)}")
     print()
 
     total_hits = count_hits(f"{args.min_year}/01/01", f"{args.max_year}/12/31")
@@ -328,7 +343,7 @@ def main(argv: list[str] | None = None) -> int:
     elapsed = time.time() - started
 
     print()
-    print(f"[ok] {total:,} unique abstracts -> {args.out.relative_to(REPO_ROOT)}")
+    print(f"[ok] {total:,} unique abstracts -> {_display(args.out)}")
     print(f"     {duplicates:,} cross-year duplicate PMIDs dropped")
     print(f"     wall clock: {elapsed / 60:.1f} min")
     print()

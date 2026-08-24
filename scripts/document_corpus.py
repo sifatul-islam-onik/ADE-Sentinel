@@ -117,7 +117,23 @@ def main() -> int:
         "|---|---|",
     ]
     for year, count in sorted(per_year.items()):
-        lines.append(f"| {year} | {count:,} |")
+        short = PER_YEAR_CAP - count
+        note = f" ({short} short of the cap)" if short > 0 else ""
+        lines.append(f"| {year} | {count:,}{note} |")
+
+    shortfalls = {y: PER_YEAR_CAP - c for y, c in per_year.items() if c < PER_YEAR_CAP}
+    if shortfalls:
+        detail = ", ".join(f"{y} ({n} records)" for y, n in sorted(shortfalls.items()))
+        lines += [
+            "",
+            f"**Records lost to unrecoverable fetch errors: {sum(shortfalls.values())}** "
+            f"across {len(shortfalls)} year(s) - {detail}. NCBI intermittently answers an "
+            "`efetch` with HTTP 400 for a particular batch of PMIDs. The fetcher bisects a "
+            "failing batch down to 25 records before giving up, so such an error costs a "
+            "handful of abstracts rather than the whole year. Recorded here because "
+            f"{sum(shortfalls.values())} of {sum(per_year.values()):,} is a real, if "
+            "negligible, deviation from the sampling rule.",
+        ]
 
     lines += [
         "",

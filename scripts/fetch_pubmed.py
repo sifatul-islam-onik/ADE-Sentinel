@@ -38,6 +38,7 @@ report/data_documentation.md.
 from __future__ import annotations
 
 import argparse
+import calendar
 import json
 import os
 import sys
@@ -116,6 +117,11 @@ def _request(endpoint: str, params: dict, *, attempts: int = 5) -> requests.Resp
                 raise FetchError(f"HTTP {resp.status_code}: {resp.text[:200]}")
         except requests.RequestException as exc:
             last = exc
+        except MemoryError as exc:
+            # Buffering a response body can fail transiently even with GBs free.
+            # Without this branch a single hiccup kills a 40-minute job outright,
+            # discarding the whole in-flight year.
+            last = exc
 
         if attempt < attempts:
             print(f"    retry {attempt}/{attempts - 1} in {delay:.0f}s ({last})")
@@ -162,7 +168,10 @@ def windows_for_year(year: int) -> list[tuple[str, str]]:
     print(f"  {year}: {hits:,} hits exceeds the {ESEARCH_CAP:,} cap - splitting by month")
     months = []
     for m in range(1, 13):
-        last_day = 31 if m in (1, 3, 5, 7, 8, 10, 12) else 30 if m != 2 else 29
+        # calendar.monthrange, not a hardcoded table. Sending 02/29 in a non-leap
+        # year makes NCBI return zero results WITHOUT an error, which silently
+        # deleted February from every non-leap year in the first collection run.
+        last_day = calendar.monthrange(year, m)[1]
         months.append((f"{year}/{m:02d}/01", f"{year}/{m:02d}/{last_day}"))
     return months
 
@@ -198,13 +207,32 @@ def parse_articles(xml: str) -> Iterator[dict]:
 
 
 def fetch_abstracts(pmids: list[str]) -> Iterator[dict]:
-    resp = _request("efetch.fcgi", {
-        "db": "pubmed", "id": ",".join(pmids), "retmode": "xml",
-    })
+    """Fetch one batch, halving it if the response cannot be handled whole.
+
+    A batch that fails on memory or a truncated body usually succeeds when split,
+    so bisect down to MIN_BATCH before giving up on those records. This keeps one
+    awkward batch from costing the entire year.
+    """
+    MIN_BATCH = 25
     try:
+        resp = _request("efetch.fcgi", {
+            "db": "pubmed", "id": ",".join(pmids), "retmode": "xml",
+        })
         yield from parse_articles(resp.text)
+        return
     except ET.ParseError as exc:
-        print(f"    [warn] XML parse failed for a batch of {len(pmids)}: {exc}")
+        reason = f"XML parse failed: {exc}"
+    except (FetchError, MemoryError) as exc:
+        reason = f"{type(exc).__name__}: {exc}"
+
+    if len(pmids) <= MIN_BATCH:
+        print(f"    [warn] dropping {len(pmids)} pmids - {reason}")
+        return
+
+    mid = len(pmids) // 2
+    print(f"    [warn] batch of {len(pmids)} failed ({reason}); splitting")
+    yield from fetch_abstracts(pmids[:mid])
+    yield from fetch_abstracts(pmids[mid:])
 
 
 def fetch_year(year: int, shard: Path, cap: int | None = PER_YEAR_CAP) -> int:

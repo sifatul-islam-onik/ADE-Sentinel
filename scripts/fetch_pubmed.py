@@ -10,19 +10,18 @@ hard-errors above 9,998 --
 
 so it dies on its second iteration with ~10k abstracts instead of 100k.
 
-The fix here is date windowing. Measured per-year counts for this query sit
-between 4.6k and 5.8k, comfortably under the cap, so one esearch per publication
-year retrieves everything without touching the History server. Each year is
-written to its own shard, which makes the whole job resumable: rerun after an
-interruption and completed years are skipped.
+The fix here is date windowing: one esearch per publication year, subdivided
+into months when a year exceeds the cap (the union query below runs ~85k/year,
+so month subdivision is the normal path, not the exception). No History server
+needed. Each year is written to its own shard, which makes the whole job
+resumable: rerun after an interruption and completed years are skipped.
 
-A year that unexpectedly exceeds the cap is split into months automatically,
-so widening the query or the date range later will not silently truncate.
-
-QUERY CHOICE (PLAN F2): PRD section 6.2's table and its script specify different
-queries -- 3,591,463 hits versus 145,177. The narrow MeSH-only query is the one
-that is correctly sized and year-windowable; the range is extended back to 1995
-for headroom over the 100k floor.
+QUERY CHOICE (PLAN F2): the PRD's table and its script specify different queries.
+Measured, with `hasabstract` applied, the narrow MeSH-only query tops out at
+92,864 records across all time -- it cannot reach the PRD's 100k floor at any
+date range. So the "adverse effects" subheading is unioned in, and the result is
+capped per year to keep the corpus temporally balanced rather than dominated by
+whichever years happen to be largest.
 
 Usage
 -----
@@ -31,8 +30,9 @@ Usage
     # 3 req/s becomes 10 req/s with a free key: https://account.ncbi.nlm.nih.gov/settings/
     NCBI_API_KEY=xxxx python scripts/fetch_pubmed.py
 
-Expect roughly 1-3 hours (PLAN F9). The wall-clock time is printed at the end
-and belongs in report/data_documentation.md.
+Expect roughly 35-45 min with an API key, measured at ~18s per 1,400 abstracts.
+The wall-clock time is printed at the end and belongs in
+report/data_documentation.md.
 """
 
 from __future__ import annotations
@@ -51,8 +51,23 @@ import requests
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
-QUERY = '"drug-related side effects and adverse reactions"[MeSH]'
-MIN_YEAR, MAX_YEAR = 1995, 2025
+
+# The MeSH term alone cannot reach the PRD's 100k floor. Measured with abstracts:
+#   MeSH only, 1995-2025 ................. 76,392
+#   MeSH only, all time, no date limit ... 92,864
+# So the "adverse effects" subheading is unioned in. `hasabstract` filters
+# server-side, so we never spend an efetch on a record with nothing to read.
+QUERY = (
+    '("drug-related side effects and adverse reactions"[MeSH]'
+    ' OR "adverse effects"[Subheading]) AND hasabstract'
+)
+MIN_YEAR, MAX_YEAR = 2010, 2025
+
+# The union query returns ~85k/year, far more than needed. Cap each year and
+# spread the cap evenly across that year's windows, so the corpus stays
+# temporally balanced instead of being 2010-2012 plus nothing. 16 years x 10k
+# targets ~160k, comfortably over the floor.
+PER_YEAR_CAP = 10_000
 
 ESEARCH_CAP = 9998        # NCBI's hard limit on retstart for PubMed
 EFETCH_BATCH = 200        # records per efetch call
@@ -61,9 +76,20 @@ RETMAX = 9999             # max PMIDs one esearch may return
 SHARD_DIR = REPO_ROOT / "data" / "raw" / "pubmed_shards"
 DEFAULT_OUT = REPO_ROOT / "data" / "pubmed_corpus.jsonl"
 
-API_KEY = os.environ.get("NCBI_API_KEY", "").strip()
-# NCBI allows 3 req/s anonymously, 10 req/s with a key. Stay just inside.
-SLEEP = 0.11 if API_KEY else 0.35
+def api_key() -> str:
+    """Read the key on every call, not once at import.
+
+    A module-level constant is a trap in a notebook: import the module, then set
+    the key in a later cell, and the module has already cached its absence -- the
+    fetch silently crawls at the anonymous rate. Reading lazily makes cell order
+    irrelevant.
+    """
+    return os.environ.get("NCBI_API_KEY", "").strip()
+
+
+def sleep_seconds() -> float:
+    """NCBI allows 3 req/s anonymously, 10 req/s with a key. Stay just inside."""
+    return 0.11 if api_key() else 0.35
 
 
 class FetchError(RuntimeError):
@@ -72,8 +98,9 @@ class FetchError(RuntimeError):
 
 def _request(endpoint: str, params: dict, *, attempts: int = 5) -> requests.Response:
     """GET with exponential backoff. NCBI throttles with 429 and sheds with 5xx."""
-    if API_KEY:
-        params = {**params, "api_key": API_KEY}
+    key = api_key()
+    if key:
+        params = {**params, "api_key": key}
 
     delay = 1.0
     last: Exception | None = None
@@ -81,7 +108,7 @@ def _request(endpoint: str, params: dict, *, attempts: int = 5) -> requests.Resp
         try:
             resp = requests.get(f"{BASE}/{endpoint}", params=params, timeout=90)
             if resp.status_code == 200:
-                time.sleep(SLEEP)
+                time.sleep(sleep_seconds())
                 return resp
             if resp.status_code in (429, 500, 502, 503, 504):
                 last = FetchError(f"HTTP {resp.status_code}")
@@ -106,15 +133,23 @@ def count_hits(mindate: str, maxdate: str) -> int:
     return int(resp.json()["esearchresult"]["count"])
 
 
-def get_pmids(mindate: str, maxdate: str) -> list[str]:
+def get_pmids(mindate: str, maxdate: str, limit: int | None = None) -> list[str]:
+    """PMIDs for one date window, newest first.
+
+    `sort=pub_date` is not cosmetic: without an explicit sort NCBI orders by
+    relevance, which is not stable across calls, so a capped fetch would return a
+    different sample every run and the corpus would stop being reproducible.
+    """
     resp = _request("esearch.fcgi", {
-        "db": "pubmed", "term": QUERY, "retmax": RETMAX, "retmode": "json",
+        "db": "pubmed", "term": QUERY, "retmax": min(limit or RETMAX, RETMAX),
+        "retmode": "json", "sort": "pub_date",
         "datetype": "pdat", "mindate": mindate, "maxdate": maxdate,
     })
     result = resp.json()["esearchresult"]
     if "ERROR" in result:
         raise FetchError(result["ERROR"])
-    return result.get("idlist", [])
+    ids = result.get("idlist", [])
+    return ids[:limit] if limit else ids
 
 
 def windows_for_year(year: int) -> list[tuple[str, str]]:
@@ -172,12 +207,23 @@ def fetch_abstracts(pmids: list[str]) -> Iterator[dict]:
         print(f"    [warn] XML parse failed for a batch of {len(pmids)}: {exc}")
 
 
-def fetch_year(year: int, shard: Path) -> int:
+def fetch_year(year: int, shard: Path, cap: int | None = PER_YEAR_CAP) -> int:
+    windows = windows_for_year(year)
+
+    # Split the year's cap evenly across its windows rather than taking the cap
+    # from the first window, which would silently make every year a January
+    # sample once month subdivision kicks in.
+    per_window = None
+    if cap:
+        per_window = -(-cap // len(windows))     # ceiling division
+
     pmids: list[str] = []
-    for lo, hi in windows_for_year(year):
-        pmids.extend(get_pmids(lo, hi))
+    for lo, hi in windows:
+        pmids.extend(get_pmids(lo, hi, limit=per_window))
 
     pmids = list(dict.fromkeys(pmids))          # de-dup, preserve order
+    if cap:
+        pmids = pmids[:cap]
     written = 0
     tmp = shard.with_suffix(".partial")
 
@@ -218,6 +264,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=DEFAULT_OUT)
     ap.add_argument("--min-year", type=int, default=MIN_YEAR)
     ap.add_argument("--max-year", type=int, default=MAX_YEAR)
+    ap.add_argument("--cap", type=int, default=PER_YEAR_CAP,
+                    help="max abstracts per year (0 = uncapped)")
     ap.add_argument("--force", action="store_true",
                     help="refetch years whose shard already exists")
     args = ap.parse_args(argv)
@@ -227,7 +275,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(f"query      : {QUERY}")
     print(f"date range : {args.min_year}/01/01 - {args.max_year}/12/31")
-    print(f"api key    : {'yes (10 req/s)' if API_KEY else 'no (3 req/s) - see NCBI_API_KEY'}")
+    print(f"per-year   : {args.cap:,} abstracts" if args.cap else "per-year   : uncapped")
+    print(f"api key    : {'yes (10 req/s)' if api_key() else 'no (3 req/s) - see NCBI_API_KEY'}")
     print(f"shards     : {SHARD_DIR.relative_to(REPO_ROOT)}")
     print()
 
@@ -241,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {year}: shard exists, skipping (--force to refetch)")
             continue
         try:
-            fetch_year(year, shard)
+            fetch_year(year, shard, cap=args.cap or None)
         except FetchError as exc:
             print(f"  {year}: FAILED - {exc}")
             print("         rerun the script; completed years are skipped")

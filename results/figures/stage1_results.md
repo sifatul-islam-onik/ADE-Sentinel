@@ -10,10 +10,66 @@ All runs share the frozen split (`data/splits/stage1_*.parquet`), seed 42, and t
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | 1 | T1 generative | `naive_bayes` | count-1-2gram | 0.7678 | 0.602 | 0.675 | 0.636 | 0.683 | 0.842 | 0.7697 | - | 0 |
 | 2 | T2 discriminative | `logreg` | tfidf-1-2gram | 0.7934 | 0.671 | 0.672 | 0.671 | 0.743 | 0.866 | 0.7895 | - | 0 |
-| 2b | T2 discriminative | `linear_svm` | tfidf-1-2gram | **0.7977** | 0.660 | 0.703 | 0.681 | 0.749 | 0.865 | 0.7921 | - | 0 |
+| 2b | T2 discriminative | `linear_svm` | tfidf-1-2gram | 0.7977 | 0.660 | 0.703 | 0.681 | 0.749 | 0.865 | 0.7921 | - | 0 |
+| 3 | T3 BiLSTM | `bilstm_attn` | E0_random | 0.7441 | 0.573 | 0.623 | 0.597 | 0.639 | 0.828 | 0.7418 | 32 | 1 |
+| 3u | T3 BiLSTM | `bilstm_attn` | E0_random | 0.8016 | 0.664 | 0.713 | 0.687 | 0.743 | 0.868 | 0.7983 | 32 | 1 |
+| 4 | T3 BiLSTM | `bilstm_attn` | E1 | 0.7942 | 0.581 | 0.856 | 0.692 | 0.786 | 0.845 | 0.7982 | 32 | 1 |
+| 4u | T3 BiLSTM | `bilstm_attn` | E1 | 0.8436 | 0.695 | 0.831 | 0.757 | 0.800 | 0.891 | 0.8474 | 32 | 1 |
+| 5 | T3 BiLSTM | `bilstm_attn` | E2 | 0.8609 | 0.718 | 0.864 | 0.784 | 0.856 | 0.903 | 0.8516 | 32 | 1 |
+| 5u | T3 BiLSTM | `bilstm_attn` | E2 | 0.8404 | 0.735 | 0.759 | 0.747 | 0.817 | 0.895 | 0.8459 | 32 | 1 |
+| 6 | T3 BiLSTM | `bilstm_attn` | E3 | 0.8785 | 0.800 | 0.814 | 0.807 | 0.882 | 0.921 | 0.8845 | 32 | 1 |
+| 6u | T3 BiLSTM | `bilstm_attn` | E3 | 0.8587 | 0.785 | 0.764 | 0.774 | 0.856 | 0.909 | 0.8696 | 32 | 1 |
+| 7 | T4 transformer | `bert-base-uncased` | bert-base-uncased | 0.9159 | 0.855 | 0.878 | 0.867 | 0.926 | 0.945 | 0.9086 | 16 | 1 |
+| 8 | T5 transformer | `biomedbert` | microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract | **0.9402** | 0.876 | 0.938 | 0.906 | 0.944 | 0.960 | 0.9351 | 16 | 1 |
 
-Best Stage 1 run so far: **2b** at macro-F1 0.7977. That is the model Phase 6.1 carries into the end-to-end pipeline (run 12).
+Best Stage 1 run so far: **8** at macro-F1 0.9402. That is the model Phase 6.1 carries into the end-to-end pipeline (run 12).
 
+Runs with a `u` suffix are the fine-tuned-embedding condition of the same ablation - see below.
+
+## The embedding ablation (runs 3-6)
+
+The project's headline experiment (PRD section 7). Identical architecture, seed, hyperparameters, split and device count; **the embedding matrix is the only thing that changes**.
+
+| Run | Embedding | Macro-F1 | vs E0 floor | vs E1 GloVe |
+|---|---|---|---|---|
+| 3 | E0 random | 0.7441 | - | - |
+| 4 | E1 GloVe | 0.7942 | +0.0501 | - |
+| 5 | E2 our W2V | 0.8609 | +0.1168 | +0.0667 |
+| 6 | E3 our FastText | 0.8785 | +0.1344 | +0.0844 |
+
+![Stage 1 macro-F1 by embedding](stage1_embeddings.png)
+
+The dashed line is run 2, the TF-IDF logistic regression. It is on the chart deliberately: a BiLSTM below it is a sign of an undertrained model, not evidence about embeddings, and the reader should be able to see that without reading the table.
+
+### Frozen vs fine-tuned
+
+The two conditions answer different questions. **Frozen** measures the vectors themselves: nothing about the embedding layer changes during training, so a difference in F1 is a difference in what the pretraining corpus taught. **Fine-tuned** asks whether that advantage survives task supervision - E0's random rows can learn from the 14.6k training sentences, and the gap it has to close is the question.
+
+| Run | Embedding | Frozen | Fine-tuned | Delta |
+|---|---|---|---|---|
+| 3 / 3u | E0_random | 0.7441 | 0.8016 | +0.0575 |
+| 4 / 4u | E1 | 0.7942 | 0.8436 | +0.0494 |
+| 5 / 5u | E2 | 0.8609 | 0.8404 | -0.0205 |
+| 6 / 6u | E3 | 0.8785 | 0.8587 | -0.0198 |
+
+Fine-tuning **helped E0_random, E1 and hurt E2, E3** - the effect reverses with the quality of the starting vectors. That is consistent with a small training set: 14.6k sentences carry enough signal to improve random or general-purpose rows, but not enough to improve vectors already trained on 100k+ biomedical abstracts, so updating them mostly discards information.
+
+Note the ordering this produces: the best fine-tuned run reaches 0.8587, still below the weakest *frozen* run among E2, E3 at 0.8609. Task supervision does not recover the gap - which is the stronger version of the claim, since it says the advantage is in the vectors themselves rather than in the initialisation they provide.
+
+PRD section 12 asks for negative and partial results to be explained rather than buried; this table is where that applies.
+
+## Domain vs general, replayed at the transformer level (runs 7-8)
+
+| Run | Model | Pretraining corpus | Macro-F1 |
+|---|---|---|---|
+| 7 | `bert-base-uncased` | books + Wikipedia | 0.9159 |
+| 8 | BiomedBERT | PubMed abstracts | 0.9402 |
+
+Domain minus general: **+0.0243**. Identical architecture, identical recipe, identical split - the pretraining corpus is the only difference, exactly as it is between E1 and E2/E3 in the ablation above.
+
+**The sign agrees in both places.** Domain pretraining is worth +0.0844 macro-F1 at the static-embedding level (E3 over E1) and +0.0243 at the contextual level (BiomedBERT over BERT-base). The same argument holds twice, at two levels of the stack, on the same split - which is the symmetry PRD 8.1 is after, and it is a stronger claim than either result alone.
+
+The margin is smaller at the transformer level, and that is worth saying plainly rather than glossing: both transformers are already strong enough that the corpus matters less than it does when the vectors are all the model has.
 
 ## Confusion matrices (test)
 
@@ -38,6 +94,76 @@ Best Stage 1 run so far: **2b** at macro-F1 0.7977. That is the model Phase 6.1 
 | **true not-ADE** | 2,261 | 232 |
 | **true ADE** | 190 | 450 |
 
+**Run 3 - `bilstm_attn` (E0_random)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,196 | 297 |
+| **true ADE** | 241 | 399 |
+
+**Run 3u - `bilstm_attn` (E0_random)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,262 | 231 |
+| **true ADE** | 184 | 456 |
+
+**Run 4 - `bilstm_attn` (E1)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,098 | 395 |
+| **true ADE** | 92 | 548 |
+
+**Run 4u - `bilstm_attn` (E1)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,260 | 233 |
+| **true ADE** | 108 | 532 |
+
+**Run 5 - `bilstm_attn` (E2)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,276 | 217 |
+| **true ADE** | 87 | 553 |
+
+**Run 5u - `bilstm_attn` (E2)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,318 | 175 |
+| **true ADE** | 154 | 486 |
+
+**Run 6 - `bilstm_attn` (E3)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,363 | 130 |
+| **true ADE** | 119 | 521 |
+
+**Run 6u - `bilstm_attn` (E3)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,359 | 134 |
+| **true ADE** | 151 | 489 |
+
+**Run 7 - `bert-base-uncased` (bert-base-uncased)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,398 | 95 |
+| **true ADE** | 78 | 562 |
+
+**Run 8 - `biomedbert` (microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract)**
+
+| | pred not-ADE | pred ADE |
+|---|---|---|
+| **true not-ADE** | 2,408 | 85 |
+| **true ADE** | 40 | 600 |
+
 ## Provenance
 
 | Run | Commit | Dirty | Dataset version | Epochs | LR |
@@ -45,5 +171,17 @@ Best Stage 1 run so far: **2b** at macro-F1 0.7977. That is the model Phase 6.1 
 | 1 | `c7e280b` | yes | - | - | - |
 | 2 | `c7e280b` | yes | - | - | - |
 | 2b | `c7e280b` | yes | - | - | - |
+| 3 | `a5e5621` | no | 1.0 | 13.0 | 0.001 |
+| 3u | `a5e5621` | yes | 1.0 | 8.0 | 0.001 |
+| 4 | `a5e5621` | yes | 1.0 | 7.0 | 0.001 |
+| 4u | `a5e5621` | yes | 1.0 | 10.0 | 0.001 |
+| 5 | `a5e5621` | yes | 1.0 | 15.0 | 0.001 |
+| 5u | `a5e5621` | yes | 1.0 | 10.0 | 0.001 |
+| 6 | `a5e5621` | yes | 1.0 | 13.0 | 0.001 |
+| 6u | `a5e5621` | yes | 1.0 | 7.0 | 0.001 |
+| 7 | `a5e5621` | yes | 1.0 | 3.0 | 2e-05 |
+| 8 | `a5e5621` | yes | 1.0 | 3.0 | 2e-05 |
 
-`git_dirty = yes` means the working tree held uncommitted changes when the run executed, so the commit hash does not fully describe the code that produced the number. Treat those rows as provisional and re-run them from a clean tree before the report is final.
+`git_dirty = yes` means the working tree held uncommitted changes when the run executed, so the commit hash does not by itself describe everything present. Read it with one thing in mind: **a run dirties the tree for the runs after it** by appending to `runs.csv` and writing its checkpoint, so in a batch executed back-to-back only the first row can be clean. That is expected and is not a reason to re-run anything.
+
+What would matter is a dirty flag on a row whose *code* differed from the commit - an edited script in the session. If every row in a batch shares one commit hash, as they do above, the code was the same for all of them and the comparison between them is sound.

@@ -9,11 +9,13 @@ corpus, and writes the report. **Every heavy job — PubMed fetch, embedding
 training, and all neural runs — executes on Kaggle (primary) or Colab (fallback).**
 No step in this plan is sized against local disk, RAM, or GPU.
 
-Status (2026-09-10): **Phases 0–3 complete.** Steps 5.1–5.3 (BIO converter, its
-tests, the spot-check) were pulled forward and are also done. Phase 4 is in
-progress: runs 1–2 are logged, the Phase 4 code and notebook are written and
-tested, and runs 3–8 are waiting on a Kaggle session
-(`notebooks/stage1_remote.ipynb`).
+Status (2026-09-11): **Phases 0–4 complete; Phase 5 code complete, runs pending.**
+Runs 1–8 are logged in `results/runs.csv` (13 rows, the Stage 1 ablation in both
+frozen and fine-tuned conditions). Steps 5.1–5.3 were done early; 5.4–5.6 are
+written and tested and await a Kaggle session (`notebooks/stage2_remote.ipynb`);
+5.7–5.9 run locally from the prediction files that session brings back
+(`scripts/stage2_report.py`). The headline claim is confirmed on all three
+evidence types — see `results/figures/stage1_results.md`.
 
 ---
 

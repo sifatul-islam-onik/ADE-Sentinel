@@ -60,6 +60,34 @@ def encode_tokens(tokens: list[str], index: dict[str, int]) -> list[int]:
     return [index.get(t, UNK_ID) for t in tokens if is_indexable(t)]
 
 
+def encode_tokens_with_tags(
+    tokens: list[str], tags: list[str], index: dict[str, int]
+) -> tuple[list[int], list[str]]:
+    """Encode tokens and drop the matching tags in lockstep (Stage 2).
+
+    The alignment hazard this exists to remove: `encode_tokens` drops tokens with
+    no alphanumeric character, while `to_bio` returns one tag per token
+    including punctuation. Filter the ids without filtering the tags and every
+    sentence containing a comma is silently off by one from that comma onward -
+    which does not raise, and trains the tagger on shifted labels.
+
+    Dropping punctuation is safe for tagging: verified over all 4,271 Stage 2
+    sentences, filtering changes the decoded entity count in zero of them. It
+    also keeps the token stream identical to the one Stage 1 sees, which matters
+    for run 12 where a Stage 1 model hands sentences to a Stage 2 model.
+    """
+    if len(tokens) != len(tags):
+        raise ValueError(f"{len(tokens)} tokens but {len(tags)} tags")
+
+    kept = [(index.get(t, UNK_ID), tag)
+            for t, tag in zip(tokens, tags) if is_indexable(t)]
+    if not kept:
+        return [], []
+
+    ids, out_tags = zip(*kept)
+    return list(ids), list(out_tags)
+
+
 def encode(text: str, index: dict[str, int], max_len: int | None = None) -> list[int]:
     """Tokenise and encode one string. Truncates, never pads."""
     tokens, _ = tokenize(text)

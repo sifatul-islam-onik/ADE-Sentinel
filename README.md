@@ -87,19 +87,25 @@ scripts/
   train_bilstm.py             step 4.3  runs 3-6, one call per embedding
   train_bert.py               step 4.4  runs 7-8
   stage1_report.py            step 4.5  results table + four-bar chart
+  train_bilstm_tagger.py      steps 5.4-5.5  runs 9-10, --crf is the only diff
+  train_bert_tagger.py        step 5.6  run 11, word-level scoring
+  stage2_report.py            steps 5.7-5.9  entity-F1, CRF ablation, sanity check
 src/
   utils.py            set_seed, log_run, F8 batch arithmetic
   tokenizer.py        step 2.1  offset-returning domain tokenizer
   bio_convert.py      step 5.1  spans -> BIO, overlap test
   embedding_eval.py   steps 3.4-3.6  coverage, neighbours, matrices
   metrics.py          Stage 1 metrics, shared by every run
+  stage2_metrics.py   steps 5.7-5.8  strict/lenient seqeval, illegal transitions
   models/
     encoding.py       text -> ids against the frozen vocabulary
     bilstm.py         step 4.2  the BiLSTM trained four times
+    bilstm_tagger.py  steps 5.4-5.5  the tagger, with and without a CRF
 notebooks/
   kaggle_template.ipynb   step 0.5  starting point for every remote run
   embeddings_remote.ipynb Phase 3  domain embeddings
   stage1_remote.ipynb     Phase 4  runs 3-8
+  stage2_remote.ipynb     Phase 5  runs 9-11
 results/
   dataset_stats.md    measured corpus statistics
   runs.csv            every run, appended as it happens
@@ -118,8 +124,8 @@ app/
 | 1 — data, frozen splits, PubMed corpus | done — `report/data_documentation.md` |
 | 2 — tokenizer and sentence splitting | done — `results/figures/tokenizer_table.md` |
 | 3 — **embeddings, the headline** | done — `coverage.md`, `neighbours.md`, `embedding_matrices.md` |
-| 4 — Stage 1 | runs 1–2 done locally; **runs 3–8 need a Kaggle session** |
-| 5 — Stage 2 | 5.1–5.3 done early (BIO converter + tests + spot-check); 5.4–5.9 pending |
+| 4 — Stage 1 | done — runs 1–8 in `runs.csv`; `stage1_results.md`, `stage1_embeddings.png` |
+| 5 — Stage 2 | code done, **runs 9–11 need a Kaggle session**; 5.7–5.9 then run locally |
 | 6–8 — integration, demo, report | not started |
 
 ### Phase 4 — what runs where
@@ -158,6 +164,34 @@ python scripts/train_bert.py   --run-id 8 --model biomedbert
 
 Bring back `results/runs.csv` and `results/figures/stage1_*` and commit them.
 See "Manual steps" below for the Kaggle and GitHub credentials this needs.
+
+### Phase 5 — what runs where
+
+Runs 9–11 go through `notebooks/stage2_remote.ipynb` on the same Kaggle setup
+(single GPU, T4 ×2 with the pin). It installs `pytorch-crf`, which the base image
+lacks, then calls:
+
+```bash
+python scripts/train_bilstm_tagger.py --run-id 9  --embedding E3
+python scripts/train_bilstm_tagger.py --run-id 10 --embedding E3 --crf
+python scripts/train_bert_tagger.py   --run-id 11 --model biomedbert
+```
+
+`--crf` is the only difference between runs 9 and 10. E3 and BiomedBERT are the
+defaults because they won their respective Phase 4 comparisons.
+
+**Scoring happens locally, not remotely.** Bring back the `test_predictions.json`
+files (a few hundred KB) and run:
+
+```bash
+.venv\Scripts\python scripts\stage2_report.py    # steps 5.7-5.9
+```
+
+That rescores every run from the saved tag sequences with `seqeval` — strict IOB2
+*and* lenient — counts illegal tag transitions for the CRF ablation, checks the BIO
+conversion against the published corpus statistics, and independently recomputes each
+logged entity-F1 to confirm the run rows and the predictions describe the same thing.
+The remote session is trusted for the training, not for the numbers.
 
 ---
 

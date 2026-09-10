@@ -32,6 +32,17 @@ from src.tokenizer import tokenize
 
 Span = tuple[int, int, str]
 
+# The tag inventory, in a FIXED order. Runs 9-11 each map tags to integer ids,
+# and a model trained under one ordering scores as noise if evaluated under
+# another - so the order lives here, beside the converter that produces the
+# tags, rather than being rebuilt from whatever labels a particular split
+# happened to contain.
+ENTITY_LABELS: tuple[str, ...] = ("DRUG", "EFFECT")
+TAGS: tuple[str, ...] = ("O",) + tuple(
+    f"{prefix}-{label}" for label in ENTITY_LABELS for prefix in ("B", "I")
+)
+TAG_TO_ID: dict[str, int] = {tag: i for i, tag in enumerate(TAGS)}
+
 
 class BIOConversionError(ValueError):
     """A span could not be aligned to any token."""

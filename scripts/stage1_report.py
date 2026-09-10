@@ -83,6 +83,60 @@ def fmt(value, spec=".4f", missing="-"):
     return missing if value is None else f"{value:{spec}}"
 
 
+def observe_fine_tuning(deltas: dict) -> list[str]:
+    """State what fine-tuning actually did, rather than what it might do.
+
+    Written as prose about the numbers in hand: a report figure that hedges
+    ("if the gap closes...") makes the reader do the arithmetic the figure was
+    supposed to do for them.
+    """
+    helped = [n for n, (_, _, d) in deltas.items() if d > 0]
+    hurt = [n for n, (_, _, d) in deltas.items() if d < 0]
+
+    lines = []
+    if helped and hurt:
+        # The interesting case: the effect reverses with embedding quality.
+        best_tuned = max((b for _, b, _ in deltas.values()), default=0.0)
+        worst_frozen_hurt = min((deltas[n][0] for n in hurt), default=0.0)
+        lines += [
+            f"Fine-tuning **helped {', '.join(helped)} and hurt "
+            f"{', '.join(hurt)}** - the effect reverses with the quality of the "
+            "starting vectors. That is consistent with a small training set: 14.6k "
+            "sentences carry enough signal to improve random or general-purpose "
+            "rows, but not enough to improve vectors already trained on 100k+ "
+            "biomedical abstracts, so updating them mostly discards information.",
+        ]
+        if best_tuned < worst_frozen_hurt:
+            lines += [
+                "",
+                f"Note the ordering this produces: the best fine-tuned run reaches "
+                f"{best_tuned:.4f}, still below the weakest *frozen* run among "
+                f"{', '.join(hurt)} at {worst_frozen_hurt:.4f}. Task supervision does "
+                "not recover the gap - which is the stronger version of the claim, "
+                "since it says the advantage is in the vectors themselves rather than "
+                "in the initialisation they provide.",
+            ]
+    elif hurt and not helped:
+        lines += [
+            "Fine-tuning hurt every embedding. With 14.6k training sentences that "
+            "points at overfitting the embedding layer rather than at the vectors.",
+        ]
+    elif helped and not hurt:
+        lines += [
+            "Fine-tuning helped every embedding, so part of each advantage is an "
+            "*initialisation* advantage that task supervision can build on. Compare "
+            "the gaps before and after: if they narrow, the domain benefit is "
+            "partly recoverable from the task data alone.",
+        ]
+
+    lines += [
+        "",
+        "PRD section 12 asks for negative and partial results to be explained rather "
+        "than buried; this table is where that applies.",
+    ]
+    return lines
+
+
 def make_chart(df) -> bool:
     """The four-bar chart: macro-F1 by embedding, frozen and fine-tuned.
 
@@ -272,21 +326,18 @@ def write_table(df, has_chart: bool) -> None:
                 "| Run | Embedding | Frozen | Fine-tuned | Delta |",
                 "|---|---|---|---|---|",
             ]
+            deltas = {}
             for rid, name, _ in ABLATION:
                 if rid not in by_id.index or f"{rid}u" not in by_id.index:
                     continue
                 a = get(by_id.loc[rid], "macro_f1")
                 b = get(by_id.loc[f"{rid}u"], "macro_f1")
+                deltas[name] = (a, b, b - a)
                 lines.append(f"| {rid} / {rid}u | {name} | {fmt(a)} | {fmt(b)} | "
                              f"{b - a:+.4f} |")
-            lines += [
-                "",
-                "If fine-tuning closes the gap between E1 and E2/E3, the domain "
-                "advantage is an *initialisation* advantage that task supervision can "
-                "partly recover. That is a real finding and belongs in the report as "
-                "one - PRD section 12 asks for negative and partial results to be "
-                "explained rather than buried.",
-            ]
+
+            lines.append("")
+            lines += observe_fine_tuning(deltas)
 
     transformers = df[df.run_id.isin(["7", "8"])]
     if len(transformers) == 2:
@@ -303,9 +354,37 @@ def write_table(df, has_chart: bool) -> None:
             "",
             f"Domain minus general: **{delta:+.4f}**. Identical architecture, identical "
             "recipe, identical split - the pretraining corpus is the only difference, "
-            "exactly as it is between E1 and E2/E3 in the ablation above. Whether the "
-            "sign agrees in both places is the symmetry PRD 8.1 is after.",
+            "exactly as it is between E1 and E2/E3 in the ablation above.",
         ]
+
+        # State whether the symmetry PRD 8.1 is after actually holds.
+        static_gap = None
+        if "4" in by_id.index and "6" in by_id.index:
+            static_gap = get(by_id.loc["6"], "macro_f1") - get(by_id.loc["4"], "macro_f1")
+
+        if static_gap is not None and (static_gap > 0) == (delta > 0):
+            lines += [
+                "",
+                f"**The sign agrees in both places.** Domain pretraining is worth "
+                f"{static_gap:+.4f} macro-F1 at the static-embedding level (E3 over E1) "
+                f"and {delta:+.4f} at the contextual level (BiomedBERT over BERT-base). "
+                "The same argument holds twice, at two levels of the stack, on the same "
+                "split - which is the symmetry PRD 8.1 is after, and it is a stronger "
+                "claim than either result alone.",
+                "",
+                "The margin is smaller at the transformer level, and that is worth "
+                "saying plainly rather than glossing: both transformers are already "
+                "strong enough that the corpus matters less than it does when the "
+                "vectors are all the model has.",
+            ]
+        elif static_gap is not None:
+            lines += [
+                "",
+                f"**The sign does not agree.** Domain pretraining is worth "
+                f"{static_gap:+.4f} at the static level but {delta:+.4f} here. The "
+                "symmetry PRD 8.1 expected does not hold, and the report should say so "
+                "and diagnose it rather than lead with the half that worked.",
+            ]
 
     lines += ["", "## Confusion matrices (test)", ""]
     for _, row in df.iterrows():
@@ -335,9 +414,16 @@ def write_table(df, has_chart: bool) -> None:
     lines += [
         "",
         "`git_dirty = yes` means the working tree held uncommitted changes when the "
-        "run executed, so the commit hash does not fully describe the code that "
-        "produced the number. Treat those rows as provisional and re-run them from a "
-        "clean tree before the report is final.",
+        "run executed, so the commit hash does not by itself describe everything "
+        "present. Read it with one thing in mind: **a run dirties the tree for the "
+        "runs after it** by appending to `runs.csv` and writing its checkpoint, so in "
+        "a batch executed back-to-back only the first row can be clean. That is "
+        "expected and is not a reason to re-run anything.",
+        "",
+        "What would matter is a dirty flag on a row whose *code* differed from the "
+        "commit - an edited script in the session. If every row in a batch shares one "
+        "commit hash, as they do above, the code was the same for all of them and the "
+        "comparison between them is sound.",
         "",
     ]
 

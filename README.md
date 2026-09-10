@@ -36,6 +36,20 @@ python -m venv .venv
 
 Exact resolved versions are in `requirements-local.lock.txt`.
 
+### Optional: run the remote-only tests locally
+
+`requirements-local.txt` has no torch on purpose (PLAN F7) — but that also makes
+`tests/test_stage1_models.py` and `tests/test_bilstm_tagger.py` skip, so a bug in
+them only surfaces inside a Kaggle session. Installing the CPU build fixes that:
+
+```bash
+.venv\Scripts\python -m pip install -r requirements-dev.txt ^
+    --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
+Training still happens on Kaggle; this is only so `pytest tests/` runs all 172 tests
+instead of skipping the ones that matter most.
+
 ## Verifying the setup
 
 ```bash

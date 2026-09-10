@@ -268,10 +268,18 @@ def crf_section(by_id) -> list[str]:
     if illegal_crf == 0 and illegal_softmax > 0:
         lines += [
             f"**The CRF eliminated illegal sequences entirely** - {illegal_softmax} "
-            f"down to zero. That is not a training outcome but a structural one: "
-            "Viterbi decoding over learned transition scores cannot produce a path "
-            "the transition matrix forbids, whereas a per-token softmax chooses each "
-            "tag independently and nothing stops it emitting `I-DRUG` after `O`.",
+            f"down to zero.",
+            "",
+            "The mechanism is worth stating precisely, because it is easy to overclaim. "
+            "`pytorch-crf` does not forbid anything: its transition matrix is "
+            "initialised uniformly and every transition stays reachable. What happens "
+            "is that the gold sequences contain no illegal transition at all, so "
+            "training drives those scores down until Viterbi never chooses a path "
+            "through them. The constraint is **learned from the data, not imposed by "
+            "the architecture** - an untrained CRF will happily emit `I-DRUG` after "
+            "`O`. The contrast with run 9 is that a per-token softmax has no mechanism "
+            "for learning it at all: it scores each position independently, so nothing "
+            "in its objective ever penalises the transition.",
             "",
         ]
         if abs(f1_delta) < 0.01:
@@ -293,10 +301,11 @@ def crf_section(by_id) -> list[str]:
     elif illegal_crf < illegal_softmax:
         lines += [
             f"The CRF reduced illegal sequences from {illegal_softmax} to "
-            f"{illegal_crf} without eliminating them. Worth checking the decode: "
-            "Viterbi over a learned transition matrix should make them impossible, "
-            "not merely rare, so a non-zero count suggests the mask or the decode "
-            "path is not what it should be.",
+            f"{illegal_crf} without eliminating them. That is a legitimate outcome "
+            "rather than a bug: the transition constraint is learned, not hard-coded, "
+            "so a rare illegal path remains reachable if its emission scores are "
+            "strong enough to outweigh the learned transition penalty. Report the "
+            "reduction as what it is - a large decrease, not a guarantee.",
             "",
         ]
     else:

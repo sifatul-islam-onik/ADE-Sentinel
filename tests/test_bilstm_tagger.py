@@ -130,10 +130,29 @@ def test_loss_is_a_scalar(softmax_tagger):
 # the CRF - run 10's whole claim
 # --------------------------------------------------------------------------
 
-def test_crf_never_emits_an_illegal_transition(matrix):
-    """Structural, so it holds even untrained. If this fails, run 10's headline
-    number is measuring a bug rather than structured prediction."""
+def test_crf_decode_honours_transition_scores(matrix):
+    """The mechanism run 10 relies on: Viterbi will not walk a transition whose
+    score is bad enough.
+
+    This is deliberately NOT phrased as "the CRF never emits an illegal
+    transition". `pytorch-crf` initialises its transition matrix uniformly and
+    forbids nothing, so an untrained CRF emits them freely - see the test below.
+    Run 10's clean output is *learned*: the gold sequences contain no illegal
+    transition, so training drives those scores down. What this test pins is
+    that the decoder respects the matrix, which is what makes that learning
+    show up in the output at all.
+    """
     net = crf_tagger(matrix)
+
+    with torch.no_grad():
+        for i, from_tag in enumerate(TAGS):
+            for j, to_tag in enumerate(TAGS):
+                if to_tag.startswith("I-") and from_tag not in (
+                        f"B-{to_tag[2:]}", f"I-{to_tag[2:]}"):
+                    net.crf.transitions[i, j] = -1e4
+            if from_tag.startswith("I-"):
+                net.crf.start_transitions[i] = -1e4
+
     torch.manual_seed(0)
     ids = torch.randint(2, VOCAB, (16, 12))
     lengths = torch.randint(1, 13, (16,))
@@ -141,6 +160,28 @@ def test_crf_never_emits_an_illegal_transition(matrix):
     for path in net.decode(ids, lengths):
         tags = [TAGS[i] for i in path]
         assert count_illegal_transitions(tags) == 0, tags
+
+
+def test_untrained_crf_is_not_a_guarantee(matrix):
+    """Documents the limit of the claim above, so the report does not overstate it.
+
+    With a uniformly initialised transition matrix an illegal path is perfectly
+    reachable. If this ever starts passing - i.e. an untrained CRF produces no
+    illegal transitions across many random sentences - then `pytorch-crf` has
+    started constraining transitions and the report's explanation of *why* run
+    10 is clean would need rewriting.
+    """
+    net = crf_tagger(matrix)
+    torch.manual_seed(0)
+    ids = torch.randint(2, VOCAB, (64, 14))
+    lengths = torch.full((64,), 14)
+
+    illegal = sum(count_illegal_transitions([TAGS[i] for i in path])
+                  for path in net.decode(ids, lengths))
+
+    assert illegal > 0, (
+        "an untrained CRF emitted no illegal transitions - pytorch-crf may now "
+        "constrain them, which would change why run 10's count is zero")
 
 
 def test_crf_decode_respects_lengths(matrix):
@@ -166,9 +207,18 @@ def test_crf_loss_is_a_positive_scalar(matrix):
 
 def test_crf_and_softmax_differ_only_in_the_head(matrix):
     """Runs 9 and 10 must share an architecture, or the comparison is not about
-    structured prediction."""
-    softmax = BiLSTMTagger(matrix, hidden_dim=8, use_crf=False)
-    crf = crf_tagger(matrix)
+    structured prediction.
+
+    Both models are built from one kwargs dict rather than two argument lists,
+    so the test cannot itself introduce the difference it is checking for - which
+    is exactly what an earlier version of it did, by letting one side take the
+    default dropout and passing 0.0 to the other.
+    """
+    pytest.importorskip("torchcrf", reason="pytorch-crf is remote-only")
+    shared_kwargs = dict(hidden_dim=8, dropout=0.0)
+
+    softmax = BiLSTMTagger(matrix, use_crf=False, **shared_kwargs)
+    crf = BiLSTMTagger(matrix, use_crf=True, **shared_kwargs)
 
     shared = {k: v for k, v in softmax.config.items() if k != "use_crf"}
     assert shared == {k: v for k, v in crf.config.items() if k != "use_crf"}

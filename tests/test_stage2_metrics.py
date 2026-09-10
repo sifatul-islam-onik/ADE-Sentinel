@@ -203,3 +203,153 @@ def test_filtering_preserves_entities_on_the_real_corpus():
             after += len(bio_to_entities([""] * len(kept), kept))
 
     assert before == after, f"{before} entities before filtering, {after} after"
+
+
+# --------------------------------------------------------------------------
+# the native scorer - the remote path, where seqeval cannot be installed
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("tags,expected", [
+    (["B-DRUG", "I-DRUG"], [(0, 2, "DRUG")]),
+    (["O", "I-DRUG", "I-DRUG"], []),                 # orphan: no entity at all
+    (["B-DRUG", "I-EFFECT"], [(0, 1, "DRUG")]),      # type change closes, orphan dropped
+    (["B-DRUG", "B-DRUG"], [(0, 1, "DRUG"), (1, 2, "DRUG")]),
+    (["O", "B-EFFECT", "O"], [(1, 2, "EFFECT")]),
+    ([], []),
+])
+def test_strict_entities(tags, expected):
+    from src.stage2_metrics import strict_entities
+
+    assert strict_entities(tags) == expected
+
+
+def test_strict_and_lenient_differ_exactly_on_orphans():
+    """`bio_to_entities` repairs an orphan `I-X`; `strict_entities` does not.
+    That difference is the whole strict/lenient distinction."""
+    from src.stage2_metrics import strict_entities
+
+    tags = ["O", "I-DRUG", "I-DRUG"]
+
+    assert bio_to_entities([""] * 3, tags) == [(1, 3, "DRUG")]
+    assert strict_entities(tags) == []
+
+
+def test_prf_counts_duplicate_entities_once_each():
+    """Two identical predictions must not both match one gold entity."""
+    from src.stage2_metrics import prf
+
+    p, r, f1 = prf([[(0, 1, "DRUG")]], [[(0, 1, "DRUG"), (0, 1, "DRUG")]])
+
+    assert r == pytest.approx(1.0)
+    assert p == pytest.approx(0.5)
+
+
+def test_native_scorer_needs_no_seqeval(monkeypatch):
+    """The remote runner has no seqeval at all (its sdist will not build on
+    Python 3.12), so this path must not import it even indirectly."""
+    import builtins
+
+    from src.stage2_metrics import native_entity_scores
+
+    real_import = builtins.__import__
+
+    def blocked(name, *args, **kwargs):
+        if name.startswith("seqeval"):
+            raise ImportError("seqeval is unavailable on the remote runner")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked)
+
+    scores = native_entity_scores(
+        [["B-DRUG", "I-DRUG", "O", "B-EFFECT"]],
+        [["B-DRUG", "I-DRUG", "O", "O"]],
+    )
+
+    assert scores["entity_f1_strict"] == pytest.approx(2 / 3)
+
+
+def test_entity_metrics_degrades_gracefully_without_seqeval(monkeypatch):
+    """Without seqeval the cross-check is skipped, not fatal - and the native
+    numbers are still returned."""
+    import builtins
+
+    real_import = builtins.__import__
+
+    def blocked(name, *args, **kwargs):
+        if name.startswith("seqeval"):
+            raise ImportError("unavailable")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", blocked)
+
+    m = entity_metrics([["B-DRUG"]], [["B-DRUG"]])
+
+    assert m["seqeval_crosscheck"] == "unavailable"
+    assert m["entity_f1_strict"] == pytest.approx(1.0)
+
+
+def test_seqeval_crosscheck_agrees_locally():
+    """Locally seqeval IS installed, so the two implementations are compared on
+    every call. This is the assertion that makes the native scorer trustworthy
+    on the remote runner where seqeval cannot check it."""
+    pytest.importorskip("seqeval")
+
+    gold = [["B-DRUG", "I-DRUG", "O", "B-EFFECT", "I-EFFECT"],
+            ["O", "B-EFFECT", "O"], ["B-DRUG", "B-DRUG", "O"]]
+    pred = [["B-DRUG", "O", "O", "I-EFFECT", "I-EFFECT"],
+            ["O", "B-EFFECT", "O"], ["B-DRUG", "I-DRUG", "O"]]
+
+    m = entity_metrics(gold, pred)
+
+    assert m["seqeval_crosscheck"] == "agrees"
+    assert m["seqeval_f1_strict"] == pytest.approx(m["entity_f1_strict"])
+    assert m["seqeval_f1_lenient"] == pytest.approx(m["entity_f1_lenient"])
+
+
+def test_native_matches_seqeval_on_the_real_corpus():
+    """The strongest form of the check: agreement over every Stage 2 sentence,
+    including deliberately malformed predictions."""
+    pytest.importorskip("seqeval")
+    pd = pytest.importorskip("pandas")
+
+    import json as _json
+    import random
+    from pathlib import Path
+
+    from seqeval.metrics import f1_score
+    from seqeval.scheme import IOB2
+
+    from src.bio_convert import to_bio
+    from src.models.encoding import load_vocab
+    from src.stage2_metrics import native_entity_scores
+
+    _, index = load_vocab()
+    splits = Path(__file__).resolve().parents[1] / "data" / "splits"
+    gold = []
+    for text, spans in zip(*(lambda d: (d.text, d.spans))(
+            pd.read_parquet(splits / "stage2_test.parquet"))):
+        raw = _json.loads(spans) if isinstance(spans, str) else spans
+        tokens, tags = to_bio(
+            text, [(int(s), int(e), str(label)) for s, e, label in raw], strict=False)
+        _, kept = encode_tokens_with_tags(tokens, tags, index)
+        if kept:
+            gold.append(kept)
+
+    rng = random.Random(11)
+    pred = []
+    for sequence in gold:
+        row = list(sequence)
+        for i, tag in enumerate(row):
+            roll = rng.random()
+            if roll < 0.12:
+                row[i] = "O" if tag != "O" else "B-DRUG"
+            elif tag.startswith("B-") and roll < 0.30:
+                row[i] = "I-" + tag[2:]          # inject illegal transitions
+        pred.append(row)
+
+    native = native_entity_scores(gold, pred)
+
+    assert native["entity_f1_strict"] == pytest.approx(
+        float(f1_score(gold, pred, mode="strict", scheme=IOB2, zero_division=0)))
+    assert native["entity_f1_lenient"] == pytest.approx(
+        float(f1_score(gold, pred, zero_division=0)))

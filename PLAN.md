@@ -9,7 +9,11 @@ corpus, and writes the report. **Every heavy job — PubMed fetch, embedding
 training, and all neural runs — executes on Kaggle (primary) or Colab (fallback).**
 No step in this plan is sized against local disk, RAM, or GPU.
 
-Status: pre-Phase-0. Nothing built yet.
+Status (2026-09-10): **Phases 0–3 complete.** Steps 5.1–5.3 (BIO converter, its
+tests, the spot-check) were pulled forward and are also done. Phase 4 is in
+progress: runs 1–2 are logged, the Phase 4 code and notebook are written and
+tested, and runs 3–8 are waiting on a Kaggle session
+(`notebooks/stage1_remote.ipynb`).
 
 ---
 

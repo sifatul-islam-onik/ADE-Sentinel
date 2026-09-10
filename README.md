@@ -76,34 +76,88 @@ data/
   interim/        grouped relations (git-ignored)
   splits/         frozen train/dev/test — COMMITTED, never regenerated
 scripts/
-  sanity_check.py     step 0.3  dataset statistics
-  fetch_pubmed.py     step 1.4  year-windowed PubMed fetch
-  push_to_kaggle.py   step 0.5  versioned artefact upload
+  sanity_check.py             step 0.3  dataset statistics
+  fetch_pubmed.py             step 1.4  year-windowed PubMed fetch
+  push_to_kaggle.py           step 0.5  versioned artefact upload
+  build_splits.py             step 1.3  the single global split
+  prepare_corpus.py           step 2.3  sentence-split the abstracts
+  train_embeddings.py         steps 3.1-3.2  Word2Vec and FastText
+  build_embedding_matrices.py step 3.6  E0-E3 aligned to one vocabulary
+  train_baselines.py          step 4.1  runs 1-2, local, seconds
+  train_bilstm.py             step 4.3  runs 3-6, one call per embedding
+  train_bert.py               step 4.4  runs 7-8
+  stage1_report.py            step 4.5  results table + four-bar chart
 src/
-  utils.py            set_seed, log_run
+  utils.py            set_seed, log_run, F8 batch arithmetic
+  tokenizer.py        step 2.1  offset-returning domain tokenizer
+  bio_convert.py      step 5.1  spans -> BIO, overlap test
+  embedding_eval.py   steps 3.4-3.6  coverage, neighbours, matrices
+  metrics.py          Stage 1 metrics, shared by every run
+  models/
+    encoding.py       text -> ids against the frozen vocabulary
+    bilstm.py         step 4.2  the BiLSTM trained four times
 notebooks/
   kaggle_template.ipynb   step 0.5  starting point for every remote run
+  embeddings_remote.ipynb Phase 3  domain embeddings
+  stage1_remote.ipynb     Phase 4  runs 3-8
 results/
   dataset_stats.md    measured corpus statistics
   runs.csv            every run, appended as it happens
+  figures/            report figures, all generated - never screenshots
 report/
 app/
 ```
 
 ---
 
-## Phase 0 status
+## Status
 
-| Step | State |
+| Phase | State |
 |---|---|
-| 0.1 repo tree, `.gitignore` | done |
-| 0.2 local + remote requirements | done, local env installed and locked |
-| 0.3 day-1 sanity script | done — see `results/dataset_stats.md` |
-| 0.4 `set_seed` / `log_run` | done — verified via `python -m src.utils` |
-| 0.5 Kaggle data path | **scripted; needs your Kaggle token and a GitHub repo** |
-| 0.6 launch PubMed fetch | **needs 0.5; optionally an NCBI API key first** |
+| 0 — foundation | done |
+| 1 — data, frozen splits, PubMed corpus | done — `report/data_documentation.md` |
+| 2 — tokenizer and sentence splitting | done — `results/figures/tokenizer_table.md` |
+| 3 — **embeddings, the headline** | done — `coverage.md`, `neighbours.md`, `embedding_matrices.md` |
+| 4 — Stage 1 | runs 1–2 done locally; **runs 3–8 need a Kaggle session** |
+| 5 — Stage 2 | 5.1–5.3 done early (BIO converter + tests + spot-check); 5.4–5.9 pending |
+| 6–8 — integration, demo, report | not started |
 
-See "Manual steps" below for what 0.5 and 0.6 need from you.
+### Phase 4 — what runs where
+
+Runs 1–2 are local and take seconds:
+
+```bash
+.venv\Scripts\python scripts\train_baselines.py   # runs 1, 2, 2b
+.venv\Scripts\python scripts\stage1_report.py     # table + chart from runs.csv
+```
+
+Runs 3–8 need a GPU, so they run from `notebooks/stage1_remote.ipynb` on Kaggle
+(**Accelerator: GPU T4 ×2, Internet: On**).
+
+**Everything in Phase 4 runs on a single GPU.** Cell 1 sets `CUDA_VISIBLE_DEVICES=0`
+before importing torch — it has to be the first cell you run, because the variable is
+read once when the CUDA context initialises and is silently ignored afterwards. Both
+training scripts pin themselves the same way when invoked directly, and
+`train_bilstm.py` refuses to start if two devices are visible. Select T4 ×2 and let the
+second card idle rather than P100: T4 has tensor cores, so `fp16` actually helps runs
+7–8, and Kaggle bills the session rather than the card.
+
+The notebook clones this repo and calls
+the committed training scripts — it holds no training logic of its own, which is
+what makes "runs 3–6 differ only in the embedding matrix" a checkable statement
+about a command line:
+
+```bash
+python scripts/train_bilstm.py --run-id 3 --embedding E0_random
+python scripts/train_bilstm.py --run-id 4 --embedding E1
+python scripts/train_bilstm.py --run-id 5 --embedding E2
+python scripts/train_bilstm.py --run-id 6 --embedding E3
+python scripts/train_bert.py   --run-id 7 --model bert-base-uncased
+python scripts/train_bert.py   --run-id 8 --model biomedbert
+```
+
+Bring back `results/runs.csv` and `results/figures/stage1_*` and commit them.
+See "Manual steps" below for the Kaggle and GitHub credentials this needs.
 
 ---
 

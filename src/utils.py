@@ -120,6 +120,48 @@ def get_device_count() -> int:
         return 0
 
 
+def pin_single_gpu() -> None:
+    """Restrict the process to one CUDA device (PLAN F8).
+
+    Two constraints make this a function rather than a line at a call site:
+
+    1. **It must run before anything initialises CUDA.** `CUDA_VISIBLE_DEVICES`
+       is read once, when the context is created; setting it after even a
+       `torch.cuda.device_count()` call is silently ignored for the life of the
+       process. Every caller therefore invokes this before importing torch.
+    2. **`setdefault`, not assignment.** An explicit `CUDA_VISIBLE_DEVICES=1` in
+       the environment is someone choosing the second card because the first is
+       busy, and overriding that would be wrong. This only supplies a default
+       for the case where nothing was chosen at all.
+
+    This module imports torch lazily and nowhere at module scope, so importing
+    it does not itself defeat the pin.
+    """
+    os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")
+
+
+def derive_per_device_batch(effective: int, device_count: int) -> int:
+    """Split an intended *effective* batch across the visible GPUs.
+
+    The inverse of what HF `Trainer` does. `Trainer` takes a per-device batch and
+    multiplies it by the device count, so the PRD's "batch 16" silently becomes
+    32 on Kaggle's 2xT4. Stating the effective batch and deriving per-device from
+    it means the recipe in the report is the recipe that ran, on either machine.
+
+    Raises rather than rounding: a quietly adjusted batch size is precisely the
+    failure PLAN F8 describes, and a run whose recipe does not match the report
+    is worse than a run that refused to start.
+    """
+    devices = max(device_count, 1)
+    if effective % devices:
+        raise ValueError(
+            f"effective batch {effective} is not divisible by {devices} visible "
+            f"GPUs. Pass an effective batch that is a multiple of {devices}, or "
+            f"pin CUDA_VISIBLE_DEVICES to a single device."
+        )
+    return effective // devices
+
+
 def log_run(
     run_id: str | int,
     stage: str,

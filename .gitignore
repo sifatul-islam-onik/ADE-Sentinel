@@ -29,6 +29,8 @@ data/interim/*
 Thumbs.db
 kaggle.json
 .env
+# Word lock files, created whenever report/*.docx is open
+~$*
 
 # Staging dir built by scripts/push_to_kaggle.py
 data/.kaggle_staging/

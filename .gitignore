@@ -19,7 +19,12 @@ data/interim/*
 *.pt
 *.ckpt
 *.safetensors
-/models/            # top-level artefact dir only; src/models/ is code
+# Top-level artefact dir only; src/models/ is code.
+# NOTE: no trailing comment on the pattern line - '#' only starts a
+# comment at the START of a line, so an inline one becomes part of the
+# pattern and silently matches nothing.
+/models/
+!/models/emb_matrices/vocab.json
 
 # --- Frozen splits ARE committed on purpose (PLAN F7). Do not ignore data/splits/. ---
 

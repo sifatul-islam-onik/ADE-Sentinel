@@ -58,13 +58,24 @@ def test_load_vocab_rejects_wrong_reserved_rows(tmp_path):
 
 
 def test_real_vocab_matches_embedding_matrices():
-    """The committed vocab and every matrix must agree on row count."""
+    """The committed vocab and every matrix present must agree on row count.
+
+    Skips rather than fails when the matrices are absent. They are gitignored by
+    design (PLAN F7 - they live in the versioned Kaggle Dataset), so a fresh
+    clone legitimately has `vocab.json` and no `.npy` files, and a test that
+    failed there would be reporting the plan rather than a defect. Where the
+    matrices *are* present, the row counts still have to line up - a mismatch
+    means the vocabulary and the matrices came from different builds, and every
+    embedding lookup after that is off by some number of rows.
+    """
     numpy = pytest.importorskip("numpy")
 
-    vocab, _ = load_vocab()
     matrices = sorted(DEFAULT_VOCAB.parent.glob("E*.npy"))
-    assert matrices, "no embedding matrices found - run build_embedding_matrices.py"
+    if not matrices:
+        pytest.skip("no embedding matrices here - attach the Kaggle Dataset, or "
+                    "run scripts/build_embedding_matrices.py")
 
+    vocab, _ = load_vocab()
     for path in matrices:
         rows = numpy.load(path, mmap_mode="r").shape[0]
         assert rows == len(vocab), f"{path.name}: {rows} rows vs vocab {len(vocab)}"

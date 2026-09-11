@@ -36,19 +36,22 @@ python -m venv .venv
 
 Exact resolved versions are in `requirements-local.lock.txt`.
 
-### Optional: run the remote-only tests locally
+### Dev extras: CPU torch and transformers
 
 `requirements-local.txt` has no torch on purpose (PLAN F7) — but that also makes
 `tests/test_stage1_models.py` and `tests/test_bilstm_tagger.py` skip, so a bug in
-them only surfaces inside a Kaggle session. Installing the CPU build fixes that:
+them only surfaces inside a Kaggle session. Since Phase 5 the extras are also needed
+for local analysis: step 5.9 and every Phase 6 step run the saved Stage 2 taggers on
+CPU. Installing the CPU build covers both:
 
 ```bash
 .venv\Scripts\python -m pip install -r requirements-dev.txt ^
     --extra-index-url https://download.pytorch.org/whl/cpu
 ```
 
-Training still happens on Kaggle; this is only so `pytest tests/` runs all 172 tests
-instead of skipping the ones that matter most.
+Training still happens on Kaggle. Locally this lets `pytest tests/` run every test
+instead of skipping the ones that matter most, and lets inference-only steps load the
+checkpoints Kaggle produced.
 
 ## Verifying the setup
 
@@ -88,7 +91,7 @@ Two rules that are easy to break and expensive to discover late:
 data/
   raw/            downloads and per-year PubMed shards (git-ignored)
   interim/        grouped relations (git-ignored)
-  splits/         frozen train/dev/test — COMMITTED, never regenerated
+  splits/         frozen train/dev/test + the run 13 cue subset — COMMITTED, never regenerated
 scripts/
   sanity_check.py             step 0.3  dataset statistics
   fetch_pubmed.py             step 1.4  year-windowed PubMed fetch
@@ -103,14 +106,25 @@ scripts/
   stage1_report.py            step 4.5  results table + four-bar chart
   train_bilstm_tagger.py      steps 5.4-5.5  runs 9-10, --crf is the only diff
   train_bert_tagger.py        step 5.6  run 11, word-level scoring
+  check_stage2_inference.py   Phase 6 gate  CPU decode == remote decode
+  reference_tagger.py         step 5.9  published SciBERT ADE tagger on our split
   stage2_report.py            steps 5.7-5.9  entity-F1, CRF ablation, sanity check
+  document_stage1.py          report section 7, generated from artefacts
+  document_stage2.py          report section 8, generated from artefacts
+  baseline_predictions.py     Phase 6  refit runs 1/2/2b exactly, save predictions
+  pipeline_eval.py            steps 6.1-6.2  runs 12/12b, oracle vs pipeline
+  negation_eval.py            step 6.3  run 13, cue vs no-cue sentences, every Stage 1 tier
+  error_taxonomy.py           step 6.4  failure kinds, sentence properties, 30-row sample
+  document_analysis.py        report sections 9-11, assembled from the Phase 6 results
 src/
   utils.py            set_seed, log_run, F8 batch arithmetic
   tokenizer.py        step 2.1  offset-returning domain tokenizer
   bio_convert.py      step 5.1  spans -> BIO, overlap test
   embedding_eval.py   steps 3.4-3.6  coverage, neighbours, matrices
   metrics.py          Stage 1 metrics, shared by every run
-  stage2_metrics.py   steps 5.7-5.8  strict/lenient seqeval, illegal transitions
+  stage2_metrics.py   steps 5.7-5.8  strict/lenient/overlap F1, illegal transitions
+  stage2_inference.py Stage 2 taggers on CPU, over the scored word stream
+  challenge_set.py    step 6.3  the frozen negation/hedging cue lists
   models/
     encoding.py       text -> ids against the frozen vocabulary
     bilstm.py         step 4.2  the BiLSTM trained four times
@@ -138,9 +152,10 @@ app/
 | 1 — data, frozen splits, PubMed corpus | done — `report/data_documentation.md` |
 | 2 — tokenizer and sentence splitting | done — `results/figures/tokenizer_table.md` |
 | 3 — **embeddings, the headline** | done — `coverage.md`, `neighbours.md`, `embedding_matrices.md` |
-| 4 — Stage 1 | done — runs 1–8 in `runs.csv`; `stage1_results.md`, `stage1_embeddings.png` |
-| 5 — Stage 2 | code done, **runs 9–11 need a Kaggle session**; 5.7–5.9 then run locally |
-| 6–8 — integration, demo, report | not started |
+| 4 — Stage 1 | done — runs 1–8 in `runs.csv`; `stage1_results.md`, `stage1_embeddings.png`, `report/stage1_documentation.md` |
+| 5 — Stage 2 | done — runs 9–11 in `runs.csv`; `stage2_results.md`, `stage2_crf.png`, `report/stage2_documentation.md` |
+| 6 — integration & analysis | done — runs 12, 12b, 13 in `runs.csv`; `pipeline_results.md`, `negation_results.md`, `error_taxonomy.md`, `report/analysis_documentation.md`. **Manual categories in `results/error_sample.csv` still to fill in** |
+| 7–8 — demo, report | not started |
 
 ### Phase 4 — what runs where
 
@@ -194,18 +209,46 @@ python scripts/train_bert_tagger.py   --run-id 11 --model biomedbert
 `--crf` is the only difference between runs 9 and 10. E3 and BiomedBERT are the
 defaults because they won their respective Phase 4 comparisons.
 
-**Scoring happens locally, not remotely.** Bring back the `test_predictions.json`
-files (a few hundred KB) and run:
+**Scoring happens locally, not remotely.** Bring back `models/stage2/` — the
+`test_predictions.json` files, the two BiLSTM checkpoints and run 11's `best/` (not its
+`trainer/` directory, which holds a 0.9 GB optimizer state) — and run:
 
 ```bash
-.venv\Scripts\python scripts\stage2_report.py    # steps 5.7-5.9
+.venv\Scripts\python scripts\check_stage2_inference.py   # CPU decode == remote decode
+.venv\Scripts\python scripts\reference_tagger.py         # step 5.9, several minutes on CPU
+.venv\Scripts\python scripts\stage2_report.py            # steps 5.7-5.9
+.venv\Scripts\python scripts\document_stage2.py          # report section 8
 ```
 
-That rescores every run from the saved tag sequences with `seqeval` — strict IOB2
-*and* lenient — counts illegal tag transitions for the CRF ablation, checks the BIO
-conversion against the published corpus statistics, and independently recomputes each
-logged entity-F1 to confirm the run rows and the predictions describe the same thing.
-The remote session is trusted for the training, not for the numbers.
+`stage2_report.py` rescores every run from the saved tag sequences — strict IOB2,
+lenient and overlap (partial-match) — cross-checks each against `seqeval`, counts
+illegal tag transitions for the CRF ablation, checks the BIO conversion against the
+published corpus statistics, and compares against a published tagger trained on the
+same corpus. The remote session is trusted for the training, not for the numbers.
+
+### Phase 6 — what runs where
+
+All local and inference-only: it needs the dev extras above and the fetched
+`models/stage1/` and `models/stage2/`.
+
+```bash
+.venv\Scripts\python scripts\baseline_predictions.py   # runs 1/2/2b predictions, refit exactly
+.venv\Scripts\python scripts\pipeline_eval.py          # 6.1-6.2, runs 12/12b
+.venv\Scripts\python scripts\negation_eval.py          # 6.3, run 13
+.venv\Scripts\python scripts\error_taxonomy.py         # 6.4
+.venv\Scripts\python scripts\document_analysis.py      # report sections 9-11
+```
+
+The first `pipeline_eval.py` run decodes all 3,133 Stage 1 test sentences with
+BiomedBERT on CPU (about 3 minutes here) and caches the result under
+`models/pipeline/`; later runs take seconds. `pipeline_eval.py` and `negation_eval.py`
+append to `results/runs.csv` — pass `--no-log` to regenerate their reports without adding
+rows. `negation_eval.py` freezes `data/splits/stage1_test_cues.parquet` on first use and
+refuses to run if the cue rule later selects anything different (PLAN F6).
+
+6.4 has a manual half. `results/error_sample.csv` lists 30 sampled failures with empty
+`manual_category` and `notes` columns: the rules flag what a sentence contains, and only
+reading it establishes what caused the error.
 
 ---
 

@@ -353,3 +353,113 @@ def test_native_matches_seqeval_on_the_real_corpus():
         float(f1_score(gold, pred, mode="strict", scheme=IOB2, zero_division=0)))
     assert native["entity_f1_lenient"] == pytest.approx(
         float(f1_score(gold, pred, zero_division=0)))
+
+
+# --------------------------------------------------------------------------
+# what lenient scoring adds, and where the entity errors are
+# --------------------------------------------------------------------------
+
+def _legal(tags):
+    """Repair orphan `I-X` into `B-X`, giving a well-formed gold sequence."""
+    fixed, previous = [], "O"
+    for tag in tags:
+        if tag.startswith("I-") and previous[2:] != tag[2:]:
+            tag = "B-" + tag[2:]
+        fixed.append(tag)
+        previous = tag
+    return fixed
+
+
+def _random_corpus(seed, sentences=300, longest=12):
+    """Well-formed gold against uniformly random - heavily malformed - output."""
+    import random
+
+    rng = random.Random(seed)
+    gold, pred = [], []
+    for _ in range(sentences):
+        n = rng.randint(1, longest)
+        gold.append(_legal([rng.choice(TAGS) for _ in range(n)]))
+        pred.append([rng.choice(TAGS) for _ in range(n)])
+    return gold, pred
+
+
+def test_repaired_entities_are_exactly_the_illegal_transitions():
+    """Strict entities are always a subset of lenient ones, and the difference
+    is one entity per illegal transition. Checked on random sequences rather
+    than on hand-picked cases, because the report's explanation of the
+    strict/lenient gap rests on it."""
+    from src.stage2_metrics import repaired_entities, strict_entities
+
+    gold, pred = _random_corpus(seed=7)
+    for p in pred:
+        strict = set(strict_entities(p))
+        lenient = set(bio_to_entities([""] * len(p), p))
+        assert strict <= lenient
+        assert len(lenient - strict) == count_illegal_transitions(p)
+
+    stats = repaired_entities(gold, pred)
+    assert stats["repaired_entities"] == sum(count_illegal_transitions(p) for p in pred)
+
+
+def test_lenient_beats_strict_exactly_when_repairs_are_accurate_enough():
+    """lenient F1 > strict F1  iff  c / k > strict F1 / 2, for k repaired
+    entities of which c are correct. The Stage 2 report uses this to explain the
+    sign of the gap, so it is checked in exact arithmetic and against the scorer
+    itself rather than taken on trust."""
+    from fractions import Fraction
+
+    from src.stage2_metrics import repaired_entities, strict_entities
+
+    def f1(gold_sets, pred_sets):
+        tp = sum(len(g & p) for g, p in zip(gold_sets, pred_sets))
+        total = sum(map(len, gold_sets)) + sum(map(len, pred_sets))
+        return Fraction(2 * tp, total) if total else Fraction(0)
+
+    for seed in range(40):
+        gold, pred = _random_corpus(seed=seed, sentences=20, longest=8)
+        gold_sets = [set(strict_entities(g)) for g in gold]
+        strict = f1(gold_sets, [set(strict_entities(p)) for p in pred])
+        lenient = f1(gold_sets, [set(bio_to_entities([""] * len(p), p)) for p in pred])
+
+        m = entity_metrics(gold, pred)
+        assert m["entity_f1_strict"] == pytest.approx(float(strict))
+        assert m["entity_f1_lenient"] == pytest.approx(float(lenient))
+
+        r = repaired_entities(gold, pred)
+        k, c = r["repaired_entities"], r["repaired_correct"]
+        if k == 0:
+            assert lenient == strict
+        else:
+            assert (lenient > strict) == (Fraction(c, k) > strict / 2)
+
+
+def test_error_breakdown_categories():
+    from src.stage2_metrics import error_breakdown
+
+    gold = [["B-EFFECT", "I-EFFECT", "O", "B-DRUG", "O", "O"]]
+    pred = [["B-EFFECT", "O", "O", "B-EFFECT", "O", "B-DRUG"]]
+
+    b = error_breakdown(gold, pred)
+
+    # predicted: a truncated EFFECT, a DRUG labelled EFFECT, an invented DRUG
+    assert (b["pred_exact"], b["pred_boundary"], b["pred_type"], b["pred_spurious"]) == (0, 1, 1, 1)
+    assert (b["gold_found"], b["gold_boundary"], b["gold_type"], b["gold_missed"]) == (0, 1, 1, 0)
+    # overlap match credits only the truncated EFFECT: 1 of 3 predicted, 1 of 2 gold
+    assert b["overlap_precision"] == pytest.approx(1 / 3)
+    assert b["overlap_recall"] == pytest.approx(1 / 2)
+    assert b["overlap_f1"] == pytest.approx(0.4)
+
+
+def test_error_breakdown_accounts_for_every_entity():
+    from src.stage2_metrics import error_breakdown, strict_entities
+
+    gold, pred = _random_corpus(seed=3)
+    b = error_breakdown(gold, pred)
+
+    assert (b["pred_exact"] + b["pred_boundary"] + b["pred_type"] + b["pred_spurious"]
+            == sum(len(strict_entities(p)) for p in pred))
+    assert (b["gold_found"] + b["gold_boundary"] + b["gold_type"] + b["gold_missed"]
+            == sum(len(strict_entities(g)) for g in gold))
+    assert b["pred_exact"] == b["gold_found"]
+    # overlap match only ever adds hits, so it can never score below exact match
+    assert b["overlap_f1"] >= entity_metrics(gold, pred)["entity_f1_strict"] - 1e-12

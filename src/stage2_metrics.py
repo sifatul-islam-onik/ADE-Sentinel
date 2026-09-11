@@ -6,11 +6,17 @@ Two things the PRD asks for, and one it gets nearly free.
 forgiving about scheme violations: a sequence like `O I-DRUG I-DRUG` is read as
 one DRUG entity, repairing what the model actually emitted. In
 `mode='strict', scheme=IOB2` the same sequence is not a valid entity and scores
-nothing. Reporting only the lenient number flatters a per-token softmax
-specifically, because that is the model which produces malformed sequences -
-which would quietly undercut the very comparison run 10 exists to make. The gap
-between the two *is* the PRD's "partial vs strict" stretch goal, obtained by
-scoring twice rather than by any extra modelling.
+nothing. Note what lenient mode does NOT do: it still requires exact entity
+boundaries, so it is not a partial-match score. The PRD's partial-match stretch
+goal is the overlap F1 from `error_breakdown`, which credits boundary errors.
+
+Which way the strict/lenient gap points is an empirical question, and the
+intuitive answer - that lenient scoring flatters the tagger which emits
+malformed sequences - is not guaranteed. Each illegal transition adds one
+repaired entity to the lenient reading and nothing else changes, so lenient F1
+is higher only when more than half-the-strict-F1 of those repairs happen to be
+correct (`repaired_entities`). When they are mostly wrong, lenient scoring
+penalises exactly the model it was expected to flatter.
 
 **Illegal transitions (5.8).** The count of `I-X` not preceded by `B-X` or
 `I-X`. This is the concrete evidence for the CRF: entity-F1 usually moves only a
@@ -30,6 +36,8 @@ agreeing is a stronger claim than one asserted.
 """
 
 from __future__ import annotations
+
+from collections import Counter
 
 from src.bio_convert import bio_to_entities, count_illegal_transitions
 
@@ -255,3 +263,90 @@ def format_entity_table(metrics: dict, labels=("drug", "effect")) -> list[str]:
             f"{metrics[f'{label}_support']:,} |"
         )
     return lines
+
+
+def repaired_entities(y_true: list[list[str]], y_pred: list[list[str]]) -> dict:
+    """What lenient scoring adds to strict, and whether it helps (step 5.7).
+
+    Both readings open an entity at every `B-X` and extend it over matching
+    `I-X`; the lenient reading additionally opens one at every illegal
+    transition. So a sequence's strict entities are always a subset of its
+    lenient ones, and the entire strict/lenient disagreement is carried by the
+    extra "repaired" entities - exactly one per illegal transition.
+
+    With k repaired entities of which c match gold, lenient F1 exceeds strict F1
+    exactly when c / k > strict_F1 / 2: F1 is 2TP / (|pred| + |gold|), and the
+    repairs add c to TP and k to |pred|. `tests/test_stage2_metrics.py` checks
+    the criterion in exact arithmetic.
+    """
+    repaired = correct = 0
+    for gold, pred in zip(y_true, y_pred):
+        gold_entities = set(bio_to_entities([""] * len(gold), gold))
+        strict = set(strict_entities(pred))
+        for entity in bio_to_entities([""] * len(pred), pred):
+            if entity not in strict:
+                repaired += 1
+                correct += entity in gold_entities
+
+    return {
+        "repaired_entities": repaired,
+        "repaired_correct": correct,
+        "repaired_precision": correct / repaired if repaired else 0.0,
+    }
+
+
+ERROR_KINDS = ("pred_exact", "pred_boundary", "pred_type", "pred_spurious",
+               "gold_found", "gold_boundary", "gold_type", "gold_missed")
+
+
+def error_breakdown(y_true: list[list[str]], y_pred: list[list[str]]) -> dict:
+    """Classify every entity as exact, or as a boundary, type or wholesale error.
+
+    Exact-match entity-F1 scores a one-token boundary slip exactly like an
+    entity invented from nothing. They are different failures - a boundary
+    error still points a reader at the right phrase - and they call for
+    different fixes, so they are counted apart. Strict IOB2 reading throughout,
+    the same one the headline F1 uses.
+
+    Predicted entities: exact | boundary (overlaps a gold entity of the same
+    label) | type (overlaps gold only under another label) | spurious.
+    Gold entities, symmetrically: found | boundary | type | missed.
+
+    Also returns overlap-match precision, recall and F1, which count boundary
+    errors as hits - the partial-match score the PRD lists as a stretch goal.
+    It is looser than a one-to-one matching (two fragments of one gold entity
+    both count toward precision), so it is reported beside exact-match F1,
+    never instead of it.
+    """
+    def overlaps(a, b):
+        return a[0] < b[1] and b[0] < a[1]
+
+    def kind(entity, others, hit, miss):
+        if entity in others:
+            return hit
+        if any(overlaps(entity, o) and o[2] == entity[2] for o in others):
+            return "boundary"
+        if any(overlaps(entity, o) for o in others):
+            return "type"
+        return miss
+
+    counts = Counter()
+    for gold, pred in zip(y_true, y_pred):
+        gold_entities, pred_entities = strict_entities(gold), strict_entities(pred)
+        for entity in pred_entities:
+            counts["pred_" + kind(entity, gold_entities, "exact", "spurious")] += 1
+        for entity in gold_entities:
+            counts["gold_" + kind(entity, pred_entities, "found", "missed")] += 1
+
+    result = {key: counts[key] for key in ERROR_KINDS}
+    predicted = sum(result[key] for key in ERROR_KINDS[:4])
+    actual = sum(result[key] for key in ERROR_KINDS[4:])
+    precision = (result["pred_exact"] + result["pred_boundary"]) / predicted if predicted else 0.0
+    recall = (result["gold_found"] + result["gold_boundary"]) / actual if actual else 0.0
+    result.update({
+        "overlap_precision": precision,
+        "overlap_recall": recall,
+        "overlap_f1": (2 * precision * recall / (precision + recall)
+                       if precision + recall else 0.0),
+    })
+    return result

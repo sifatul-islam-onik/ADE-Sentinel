@@ -14,8 +14,8 @@ Phase 3 was run first.
 
 **Selection on dev entity-F1, strict mode.** Not token accuracy, which is 79%
 for a model that predicts `O` everywhere, and not lenient entity-F1, which
-repairs malformed sequences and would therefore hide exactly the difference run
-10 is meant to demonstrate.
+credits entities only after the scorer has repaired the malformed sequence the
+model actually emitted - the property run 10 exists to measure.
 
 **Single GPU, always** (PLAN F8). `DataParallel` splits the batch across devices
 and the CRF computes its loss inside `forward`, so two GPUs return a loss vector

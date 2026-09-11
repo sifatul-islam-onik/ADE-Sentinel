@@ -5,14 +5,15 @@ figure here matches the artefacts on disk.
 
 This is the project's headline contribution. PRD section 7 asks for the claim -
 that embeddings trained on our own biomedical corpus outperform general-purpose
-vectors - to be supported **three independent ways**. Two are complete; the
-third needs the BiLSTM.
+vectors - to be supported **three independent ways**.
+
+**All three now agree.** Coverage, nearest neighbours and downstream F1 point the same way, which is a materially stronger position than any one of them alone.
 
 | Evidence | Status |
 |---|---|
 | 6.2 Vocabulary coverage | complete |
 | 6.3 Nearest-neighbour quality | complete |
-| 6.4 Downstream F1 (runs 3-6) | pending - needs GPU |
+| 6.4 Downstream F1 (runs 3-6) | complete |
 
 ---
 
@@ -196,13 +197,28 @@ specifies three independent evidence types instead of one.
 
 ## 6.4 Downstream impact
 
-**Pending - runs 3-6.** The BiLSTM is trained four times with every hyperparameter,
-the architecture, the splits and the seed held fixed, changing only the embedding
-matrix. Macro-F1 for Stage 1 is plotted as a four-bar chart.
-
-This is the evidence that adjudicates 6.2 against 6.3, and the only one that
+The BiLSTM is trained four times with the architecture, hyperparameters,
+splits, seed and device count held fixed, changing only the embedding matrix.
+This is the evidence that adjudicates 6.2 against 6.3 - the only one that
 measures whether the representational differences above translate into task
 performance.
+
+| Run | Embedding | Stage 1 macro-F1 | vs E0 floor | vs E1 GloVe |
+|---|---|---|---|---|
+| 3 | E0 random | 0.7441 | - | - |
+| 4 | E1 GloVe | 0.7942 | +0.0501 | - |
+| 5 | E2 our Word2Vec | 0.8609 | +0.1168 | +0.0667 |
+| 6 | E3 our FastText | **0.8785** | +0.1344 | +0.0844 |
+
+![Stage 1 macro-F1 by embedding](../results/figures/stage1_embeddings.png)
+
+**The domain advantage is confirmed, and it is large.** Our Word2Vec beats GloVe by +0.0667 macro-F1 and our FastText by +0.0844, on identical architecture, seed and data.
+
+For scale: the TF-IDF logistic regression baseline scores 0.7934. GloVe therefore buys **+0.0007** over sparse counting - essentially nothing - while our vectors buy +0.0851. The value is not in using embeddings; it is in using embeddings trained on the right corpus.
+
+**This adjudicates 6.2 against 6.3.** Section 6.3 found that E3 FastText returns morphological variants rather than semantic relatives, and could not recover `adriamycin` for `doxorubicin` - which looked like a weakness beside E2's cleaner neighbour lists. Downstream, E3 still edges E2 out (0.8785 against 0.8609). The reading that fits both observations is that robustness to spelling variation and the absence of any OOV are worth more on this task than neighbour-list quality suggests, while the two effects are close enough that neither section alone would have settled it. That is precisely why the PRD asks for three independent evidence types rather than one.
+
+Full Stage 1 analysis, including the fine-tuned condition and the transformer tier, is in `report/stage1_documentation.md`.
 
 ---
 

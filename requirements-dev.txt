@@ -1,7 +1,10 @@
 # ADE-Sentinel — DEV extras for the local machine. Optional.
 #
-# Nothing in the project needs these to RUN. They exist so the tests for
-# remote-only code can execute on the machine that writes it.
+# Nothing in the training pipeline needs these locally. They exist so the tests
+# for remote-only code can execute on the machine that writes it - and, since
+# Phase 5, so the inference-only analysis steps (5.9 and all of Phase 6) can run
+# the checkpoints Kaggle produced on CPU. scripts/check_stage2_inference.py
+# verifies that CPU decode matches the remote decode before those are trusted.
 #
 # The problem they solve: PLAN F7 keeps torch off the local environment because
 # every neural run executes on Kaggle. A side effect is that
@@ -18,7 +21,7 @@
 #
 # Both are caught in about three seconds locally with these installed.
 #
-# Install (CPU wheels only — no CUDA, ~200 MB):
+# Install (CPU wheels only — no CUDA):
 #   .venv\Scripts\python -m pip install -r requirements-dev.txt \
 #       --extra-index-url https://download.pytorch.org/whl/cpu
 #
@@ -27,6 +30,7 @@
 
 torch          # CPU build; see the --extra-index-url above
 pytorch-crf==0.7.2
+transformers==5.0.0   # the version run 11 trained with (its saved config.json)
 
 # NOTE: seqeval is in requirements-local.txt, not here — it is used by the
 # report scripts, not just the tests. It cannot be installed on the remote

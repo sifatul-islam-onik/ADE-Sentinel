@@ -61,5 +61,118 @@
     2754,
     3093,
     3110
-  ]
+  ],
+  "manual": {
+    "categorised_by": "drafted by an AI coding agent from the sentence text; not yet reviewed by the authors",
+    "sampled": 30,
+    "read": 30,
+    "complete": true,
+    "primary": {
+      "negation": 1,
+      "hedging": 0,
+      "multi-drug": 3,
+      "abbreviation": 0,
+      "boundary": 9,
+      "generic effect": 4,
+      "unrelated mention": 0,
+      "indirect statement": 5,
+      "gold questionable": 8,
+      "other": 0
+    },
+    "secondary": {
+      "negation": 1,
+      "hedging": 0,
+      "multi-drug": 0,
+      "abbreviation": 0,
+      "boundary": 1,
+      "generic effect": 0,
+      "unrelated mention": 2,
+      "indirect statement": 4,
+      "gold questionable": 0,
+      "other": 0
+    },
+    "ci95_primary": {
+      "negation": [
+        0.005908590381612455,
+        0.16670390991409173
+      ],
+      "hedging": [
+        0.0,
+        0.11351339317396876
+      ],
+      "multi-drug": [
+        0.03459988874733419,
+        0.25621082579184085
+      ],
+      "abbreviation": [
+        0.0,
+        0.11351339317396876
+      ],
+      "boundary": [
+        0.16664748268243793,
+        0.47875787458714947
+      ],
+      "generic effect": [
+        0.053096554840547455,
+        0.296813266820363
+      ],
+      "unrelated mention": [
+        0.0,
+        0.11351339317396876
+      ],
+      "indirect statement": [
+        0.0733654237184855,
+        0.3356435050641603
+      ],
+      "gold questionable": [
+        0.14182663319596317,
+        0.4444796169518888
+      ],
+      "other": [
+        0.0,
+        0.11351339317396876
+      ]
+    },
+    "primary_by_population": {
+      "negation": {
+        "gate miss": 0,
+        "gate false alarm": 1,
+        "Stage 2 error": 0
+      },
+      "multi-drug": {
+        "gate miss": 0,
+        "gate false alarm": 0,
+        "Stage 2 error": 3
+      },
+      "boundary": {
+        "gate miss": 0,
+        "gate false alarm": 0,
+        "Stage 2 error": 9
+      },
+      "generic effect": {
+        "gate miss": 0,
+        "gate false alarm": 0,
+        "Stage 2 error": 4
+      },
+      "indirect statement": {
+        "gate miss": 1,
+        "gate false alarm": 4,
+        "Stage 2 error": 0
+      },
+      "gold questionable": {
+        "gate miss": 1,
+        "gate false alarm": 4,
+        "Stage 2 error": 3
+      }
+    },
+    "population_sizes": {
+      "Stage 2 error": 19,
+      "gate false alarm": 9,
+      "gate miss": 2
+    },
+    "low_confidence": 10,
+    "gold_questionable": 8,
+    "hedging_cue_rows": 6,
+    "hedging_cue_rows_read_as_hedging": 0
+  }
 }

@@ -31,6 +31,7 @@
 torch          # CPU build; see the --extra-index-url above
 pytorch-crf==0.7.2
 transformers==5.0.0   # the version run 11 trained with (its saved config.json)
+streamlit==1.63.0     # Phase 7 demo, app/streamlit_app.py; also its test in tests/
 
 # NOTE: seqeval is in requirements-local.txt, not here — it is used by the
 # report scripts, not just the tests. It cannot be installed on the remote

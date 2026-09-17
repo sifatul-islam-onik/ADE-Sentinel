@@ -288,6 +288,41 @@ def gate_counts(gold, labels, decisions, pred) -> dict:
             "fp_predicted_by_label": dict(fp_entities)}
 
 
+def run_metrics(r: dict, decode_seconds) -> dict:
+    """The runs.csv metrics for one scored pipeline - shared with scripts/check_demo.py."""
+    so, sp = r["scores"]["oracle"], r["scores"]["pipeline"]
+    d, ci, c = r["decomposition"], r["ci"], r["counts"]
+    return {
+        "entity_f1_strict": sp["entity_f1_strict"],
+        "entity_f1_lenient": sp["entity_f1_lenient"],
+        "entity_precision_strict": sp["entity_precision_strict"],
+        "entity_recall_strict": sp["entity_recall_strict"],
+        "overlap_f1": sp["overlap_f1"],
+        "oracle_entity_f1_strict": so["entity_f1_strict"],
+        "oracle_precision_strict": so["entity_precision_strict"],
+        "oracle_recall_strict": so["entity_recall_strict"],
+        "fn_only_entity_f1_strict": r["scores"]["fn_only"]["entity_f1_strict"],
+        "fp_only_entity_f1_strict": r["scores"]["fp_only"]["entity_f1_strict"],
+        "loss_total": d["total"], "loss_from_stage1_fn": d["fn"],
+        "loss_from_stage1_fp": d["fp"],
+        **({"ci95_loss_total": ci["total"], "ci95_loss_fn": ci["fn"],
+            "ci95_loss_fp": ci["fp"]} if ci else {}),
+        "gold_entities": so["gold_entities"],
+        "pipeline_pred_entities": sp["pred_entities_strict"],
+        **{f"gate_{k}": v for k, v in c.items()},
+        "stage2_decode_seconds": decode_seconds,
+    }
+
+
+def run_params(r: dict, bootstrap_reps: int, torch_version: str, transformers_version: str) -> dict:
+    return {"stage1_run": r["s1"], "stage2_run": r["s2"],
+            "gate": "saved Stage 1 test argmax decisions",
+            "stage2_inference": "local CPU, verified against remote decode",
+            "decomposition": "two-order average (Shapley)",
+            "bootstrap_resamples": bootstrap_reps, "bootstrap_seed": SEED,
+            "torch": torch_version, "transformers": transformers_version}
+
+
 def score_pipeline(gold, labels, decisions, pred, reps: int) -> dict:
     tag_sets = build_settings(gold, labels, decisions, pred)
     scores = {}
@@ -678,37 +713,10 @@ def main(argv=None) -> int:
         from src.utils import log_run
 
         for r in results:
-            so, sp = r["scores"]["oracle"], r["scores"]["pipeline"]
-            d, ci, c = r["decomposition"], r["ci"], r["counts"]
-            metrics = {
-                "entity_f1_strict": sp["entity_f1_strict"],
-                "entity_f1_lenient": sp["entity_f1_lenient"],
-                "entity_precision_strict": sp["entity_precision_strict"],
-                "entity_recall_strict": sp["entity_recall_strict"],
-                "overlap_f1": sp["overlap_f1"],
-                "oracle_entity_f1_strict": so["entity_f1_strict"],
-                "oracle_precision_strict": so["entity_precision_strict"],
-                "oracle_recall_strict": so["entity_recall_strict"],
-                "fn_only_entity_f1_strict": r["scores"]["fn_only"]["entity_f1_strict"],
-                "fp_only_entity_f1_strict": r["scores"]["fp_only"]["entity_f1_strict"],
-                "loss_total": d["total"], "loss_from_stage1_fn": d["fn"],
-                "loss_from_stage1_fp": d["fp"],
-                **({"ci95_loss_total": ci["total"], "ci95_loss_fn": ci["fn"],
-                    "ci95_loss_fp": ci["fp"]} if ci else {}),
-                "gold_entities": so["gold_entities"],
-                "pipeline_pred_entities": sp["pred_entities_strict"],
-                **{f"gate_{k}": v for k, v in c.items()},
-                "stage2_decode_seconds": decodes[r["s2"]]["decode_seconds"],
-            }
             log_run(
                 run_id=r["run_id"], stage="1+2", model=f"run{r['s1']}+run{r['s2']}",
-                metrics=metrics,
-                params={"stage1_run": r["s1"], "stage2_run": r["s2"],
-                        "gate": "saved Stage 1 test argmax decisions",
-                        "stage2_inference": "local CPU, verified against remote decode",
-                        "decomposition": "two-order average (Shapley)",
-                        "bootstrap_resamples": args.bootstrap, "bootstrap_seed": SEED,
-                        "torch": torch.__version__, "transformers": transformers.__version__},
+                metrics=run_metrics(r, decodes[r["s2"]]["decode_seconds"]),
+                params=run_params(r, args.bootstrap, torch.__version__, transformers.__version__),
                 seed=SEED, device_count=0,
                 notes=f"Step 6.1-6.2 run {r['run_id']}; {r['why']}; inference only.",
             )

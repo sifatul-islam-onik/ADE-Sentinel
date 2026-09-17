@@ -84,6 +84,25 @@ def manual_categories():
     return sum(bool((r.get("manual_category") or "").strip()) for r in rows), len(rows)
 
 
+def causes_bullet(causes: dict) -> str:
+    """Section 11's reading of the sample, from the `manual` block of error_taxonomy.json."""
+    n, primary = causes["sampled"], causes["primary"]
+    ranked = sorted((c for c in primary if c != "gold questionable" and primary[c]),
+                    key=lambda c: -primary[c])        # stable: ties keep codebook order
+    cut = primary[ranked[min(2, len(ranked) - 1)]] if ranked else 0
+    top = [c for c in ranked if primary[c] >= cut]
+    named = [f"*{c}* ({primary[c]})" for c in top]
+    listed = ", ".join(named[:-1]) + (" and " if len(named) > 1 else "") + (named[-1] if named else "")
+    gq = causes["gold_questionable"]
+    return (
+        f"- **Causes, from reading the sample (section 11).** All {n} sampled failures have been "
+        f"read (categories {causes['categorised_by']}). {gq} of the {n} are *gold questionable* "
+        "- read plainly, the sentence contradicts its gold - so part of what is scored as pipeline "
+        "failure may be annotation error. "
+        + (f"Among the rest, the commonest primary causes are {listed}. " if named else "")
+        + f"With {n} rows every share has a wide interval; section 11 gives them.")
+
+
 def summary(runs: dict) -> list[str]:
     L = ["## Summary", ""]
 
@@ -113,8 +132,8 @@ def summary(runs: dict) -> list[str]:
             + (f"Of these, only runs {', '.join(below)} lose recall with an interval entirely "
                "below zero." if below else "No interval lies entirely below zero."))
 
-    if TAXONOMY_JSON.exists():
-        t = json.loads(TAXONOMY_JSON.read_text(encoding="utf-8"))
+    t = json.loads(TAXONOMY_JSON.read_text(encoding="utf-8")) if TAXONOMY_JSON.exists() else None
+    if t:
         significant = t.get("significant", [])
         found = "; ".join(
             f"{PROPERTY.get(s['property'], s['property'])} among "
@@ -137,12 +156,13 @@ def summary(runs: dict) -> list[str]:
     manual = manual_categories()
     if manual is not None:
         filled, total = manual
-        if filled == 0:
-            L.append(
-                f"- **Still to do by hand.** `results/error_sample.csv` lists {total} sampled "
-                "failures with empty `manual_category` and `notes` columns. Section 11 reports "
-                "what failing sentences *contain*; what *caused* each failure should be quoted "
-                "only once those columns are filled in.")
+        causes = (t or {}).get("manual")
+        if total and filled == total:
+            if not causes or not causes["complete"] or causes["read"] != filled:
+                raise SystemExit("results/error_sample.csv is fully read but "
+                                 "results/error_taxonomy.json does not count it - run "
+                                 "scripts/error_taxonomy.py first")
+            L.append(causes_bullet(causes))
         else:
             L.append(f"- Manual categories are filled in for {filled} of the {total} sampled "
                      "failures in `results/error_sample.csv`.")

@@ -9,13 +9,13 @@ corpus, and writes the report. **Every heavy job — PubMed fetch, embedding
 training, and all neural runs — executes on Kaggle (primary) or Colab (fallback).**
 No step in this plan is sized against local disk, RAM, or GPU.
 
-Status (2026-09-11): **Phases 0–4 complete; Phase 5 code complete, runs pending.**
-Runs 1–8 are logged in `results/runs.csv` (13 rows, the Stage 1 ablation in both
-frozen and fine-tuned conditions). Steps 5.1–5.3 were done early; 5.4–5.6 are
-written and tested and await a Kaggle session (`notebooks/stage2_remote.ipynb`);
-5.7–5.9 run locally from the prediction files that session brings back
-(`scripts/stage2_report.py`). The headline claim is confirmed on all three
-evidence types — see `results/figures/stage1_results.md`.
+Status (2026-09-11): **Phases 0–7 built; Phase 8 (report) not started.**
+Runs 1–13 are logged in `results/runs.csv`, plus run 12c, the pair the demo ships.
+The headline claim is confirmed on all three evidence types — see
+`results/figures/stage1_results.md`. Two open items: the 30 manual error causes for
+step 6.4 were drafted by an AI agent and await the authors' review before the report
+quotes them; and the demo's cold start misses the PRD's five seconds narrowly (median
+5.2 s, `results/demo_check.json`), almost all of it Streamlit and torch starting up.
 
 ---
 

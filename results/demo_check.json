@@ -1,0 +1,123 @@
+{
+  "cold_start": {
+    "measured": true,
+    "browser": "msedge.exe",
+    "launch_seconds": [
+      5.22,
+      4.97,
+      5.51,
+      5.27,
+      4.98,
+      5.26
+    ],
+    "median_seconds": 5.24,
+    "max_seconds": 5.51,
+    "limit_seconds": 5.0,
+    "launches_over_limit": 4
+  },
+  "pairs": {
+    "bilstm": {
+      "gate": {
+        "sentences": 3133,
+        "identical_decisions": 3133,
+        "max_abs_score_difference": 3.5762786865234375e-07,
+        "load_seconds": 1.52,
+        "decode_seconds": 2.84
+      },
+      "examples": [
+        {
+          "test_index": 36,
+          "corpus_ade": true,
+          "is_ade": true,
+          "confidence": 0.9785,
+          "entities": [
+            "EFFECT acute urticaria",
+            "EFFECT labial angioedema",
+            "DRUG cloxacillin"
+          ]
+        },
+        {
+          "test_index": 73,
+          "corpus_ade": true,
+          "is_ade": true,
+          "confidence": 0.9401,
+          "entities": [
+            "EFFECT toxic hepatitis",
+            "DRUG methotrexate",
+            "DRUG etretinate"
+          ]
+        },
+        {
+          "test_index": 2446,
+          "corpus_ade": false,
+          "is_ade": false,
+          "confidence": 0.9443,
+          "entities": []
+        },
+        {
+          "test_index": 34,
+          "corpus_ade": true,
+          "is_ade": true,
+          "confidence": 0.9909,
+          "entities": [
+            "EFFECT schizophrenia",
+            "DRUG bromocriptine"
+          ]
+        },
+        {
+          "test_index": 13,
+          "corpus_ade": false,
+          "is_ade": false,
+          "confidence": 0.9736,
+          "entities": []
+        }
+      ]
+    }
+  },
+  "run_12c": {
+    "entity_f1_strict": 0.6890914806664571,
+    "entity_f1_lenient": 0.6888540031397176,
+    "entity_precision_strict": 0.698534098151689,
+    "entity_recall_strict": 0.6799007444168734,
+    "overlap_f1": 0.7607750339246868,
+    "oracle_entity_f1_strict": 0.8308378464479133,
+    "oracle_precision_strict": 0.85396201702685,
+    "oracle_recall_strict": 0.8089330024813896,
+    "fn_only_entity_f1_strict": 0.7616400277970813,
+    "fp_only_entity_f1_strict": 0.7576990122022078,
+    "loss_total": 0.14174636578145616,
+    "loss_from_stage1_fn": 0.06890267509329134,
+    "loss_from_stage1_fp": 0.07284369068816482,
+    "ci95_loss_total": [
+      0.12154612930165379,
+      0.16340435349126423
+    ],
+    "ci95_loss_fn": [
+      0.054097264185865614,
+      0.08489670577108395
+    ],
+    "ci95_loss_fp": [
+      0.05982518618866897,
+      0.08605934267406498
+    ],
+    "gold_entities": 1612,
+    "pipeline_pred_entities": 1569,
+    "gate_tp": 521,
+    "gate_fn": 119,
+    "gate_fp": 130,
+    "gate_tn": 2363,
+    "gate_fn_gold_entities": 285,
+    "gate_fn_oracle_found": 208,
+    "gate_fp_sentences_with_entities": 130,
+    "gate_fp_predicted_entities": 303,
+    "gate_fp_predicted_by_label": {
+      "DRUG": 155,
+      "EFFECT": 148
+    },
+    "stage2_decode_seconds": 3.0
+  },
+  "torch": "2.14.0+cpu",
+  "failures": [
+    "median cold start 5.24 s exceeds 5 s"
+  ]
+}

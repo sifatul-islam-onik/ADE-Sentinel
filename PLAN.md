@@ -9,6 +9,12 @@ corpus, and writes the report. **Every heavy job — PubMed fetch, embedding
 training, and all neural runs — executes on Kaggle (primary) or Colab (fallback).**
 No step in this plan is sized against local disk, RAM, or GPU.
 
+> **Scope note (2026-09-18).** This plan is a historical record and has not been
+> rewritten. The build steps below are complete, but the code that implemented them —
+> `scripts/`, `tests/`, and five `src/` modules — was removed from the working tree once
+> the project finished; it is in git history at commit `b520b51`. Every artefact those
+> steps produced is still committed. See [README.md](README.md#repository-scope--read-this-first).
+
 Status (2026-09-11): **Phases 0–7 built; Phase 8 (report) not started.**
 Runs 1–13 are logged in `results/runs.csv`, plus run 12c, the pair the demo ships.
 The headline claim is confirmed on all three evidence types — see

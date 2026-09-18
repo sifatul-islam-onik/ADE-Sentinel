@@ -1,38 +1,40 @@
-# ADE-Sentinel — DEV extras for the local machine. Optional.
+# ADE-Sentinel — CPU runtime for the demo. REQUIRED, despite the file name.
 #
-# Nothing in the training pipeline needs these locally. They exist so the tests
-# for remote-only code can execute on the machine that writes it - and, since
-# Phase 5, so the inference-only analysis steps (5.9 and all of Phase 6) can run
-# the checkpoints Kaggle produced on CPU. scripts/check_stage2_inference.py
-# verifies that CPU decode matches the remote decode before those are trusted.
+# These were originally "dev extras": optional packages so that tests for
+# remote-only code could execute on the machine that wrote it, and so the
+# inference-only analysis steps could run Kaggle's checkpoints on CPU.
 #
-# The problem they solve: PLAN F7 keeps torch off the local environment because
-# every neural run executes on Kaggle. A side effect is that
-# tests/test_stage1_models.py, tests/test_bilstm_tagger.py and the CRF tests
-# skip locally — so a bug in them is only discovered inside a Kaggle session,
-# after the clone, the install and the GPU allocation. That cost two sessions
-# during Phase 5, on two real defects:
+# After the repo was trimmed to the demo, they are no longer optional.
+# app/streamlit_app.py loads real checkpoints on CPU at startup, so
+# requirements-local.txt alone will not start the app. Install both:
+#
+#   .venv\Scripts\python -m pip install -r requirements-local.txt
+#   .venv\Scripts\python -m pip install -r requirements-dev.txt \
+#       --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# CPU wheels only — no CUDA. Training happened on Kaggle and is not reproducible
+# from this tree without restoring scripts/ (see README, "Repository scope").
+#
+# Historical note, kept because it explains why the test suite mattered:
+# PLAN F7 kept torch off the local environment because every neural run executed
+# on Kaggle. A side effect was that tests/test_stage1_models.py,
+# tests/test_bilstm_tagger.py and the CRF tests skipped locally — so a bug in
+# them was only discovered inside a Kaggle session, after the clone, the install
+# and the GPU allocation. That cost two sessions during Phase 5, on two real
+# defects:
 #
 #   1. A test built one model with the default dropout and the other with 0.0,
 #      then asserted their configs were identical.
 #   2. A test asserted an untrained CRF cannot emit an illegal tag transition.
 #      It can — pytorch-crf initialises its transition matrix uniformly and
 #      forbids nothing. The clean output in run 10 is LEARNED, not structural.
-#
-# Both are caught in about three seconds locally with these installed.
-#
-# Install (CPU wheels only — no CUDA):
-#   .venv\Scripts\python -m pip install -r requirements-dev.txt \
-#       --extra-index-url https://download.pytorch.org/whl/cpu
-#
-# This does NOT change where the real runs happen. The CPU build is for the
-# tiny synthetic tensors in the test suite; training still belongs on Kaggle.
 
-torch          # CPU build; see the --extra-index-url above
-pytorch-crf==0.7.2
+torch                 # CPU build; see the --extra-index-url above
+pytorch-crf==0.7.2    # run 10's BiLSTM-CRF tagger — the demo's DEFAULT Stage 2
 transformers==5.0.0   # the version run 11 trained with (its saved config.json)
-streamlit==1.63.0     # Phase 7 demo, app/streamlit_app.py; also its test in tests/
+streamlit==1.63.0     # the demo itself, app/streamlit_app.py
 
-# NOTE: seqeval is in requirements-local.txt, not here — it is used by the
-# report scripts, not just the tests. It cannot be installed on the remote
+# NOTE: seqeval is in requirements-local.txt, not here. src/stage2_metrics.py
+# cross-checks its own entity scores against seqeval where it is installed, and
+# degrades gracefully where it is not. It cannot be installed on the remote
 # runner at all; see requirements-remote.txt for why.

@@ -26,15 +26,16 @@ A browser tab opens by itself. If it does not, go to <http://localhost:8501>.
 
 ## Reading the result
 
-Type into the **Text** box, then press **Ctrl+Enter** or click outside the box.
+Type into the **Your sentence** box, then press **Ctrl+Enter** or click outside the box.
 
 | You see | It means |
 |---|---|
-| a red **ADE** label | the demo thinks a medicine caused a side effect |
-| a grey **not ADE** label | the demo thinks nothing like that happened |
-| a **blue** highlight marked DRUG | the medicine it found |
-| an **orange** highlight marked EFFECT | the side effect it found |
-| "gate confidence 97%" | how sure it is about the red or grey label |
+| **"Yes - this reports a side effect"** in red | the demo thinks a medicine caused harm |
+| **"No side effect reported here"** in grey | the demo thinks nothing like that happened |
+| a **blue** highlight | the medicine it found |
+| an **orange** highlight | the harm it found |
+| **"Medicine:"** and **"Harm it caused:"** under the sentence | the same findings, listed plainly |
+| "The tool is 97% sure" | how confident it is in its yes/no answer |
 
 Each sentence gets its own box. The buttons under **Try an example** fill in real sentences
 from medical papers.
@@ -47,7 +48,7 @@ from medical papers.
 
 ### Sentences that should say ADE
 
-You should see a red **ADE** label, the medicine in blue and the side effect in orange.
+You should see **"Yes - this reports a side effect"**, the medicine in blue and the harm in orange.
 
 | Pattern | Example to type |
 |---|---|
@@ -59,7 +60,7 @@ You should see a red **ADE** label, the medicine in blue and the side effect in 
 
 ### Sentences that should say not ADE
 
-You should see a grey **not ADE** label and no highlights.
+You should see **"No side effect reported here"** and no highlights.
 
 | Pattern | Example to type | Why it is not ADE |
 |---|---|---|

@@ -1,0 +1,14 @@
+# Forced light theme. The demo is shown on projectors and read by people who
+# find low-contrast dark themes hard going, so it must not follow the viewer's
+# system dark-mode setting.
+
+[theme]
+base = "light"
+primaryColor = "#1d4ed8"
+backgroundColor = "#ffffff"
+secondaryBackgroundColor = "#f1f5f9"
+textColor = "#111827"
+font = "sans serif"
+
+[browser]
+gatherUsageStats = false

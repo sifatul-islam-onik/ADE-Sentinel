@@ -4,7 +4,7 @@ Every number the project measured.
 
 | | |
 |---|---|
-| `runs.csv` | **the master log** — one row per experiment, with its score, hyperparameters, seed and git commit. The notebooks read their tables from here. |
+| `runs.csv` | **the run log** — one row per model this branch ships, with its score, hyperparameters, seed and git commit. The notebooks read their tables from here. |
 | `figures/*.png` | the charts |
 | `figures/*.md` | the detailed write-up behind each chart |
 | `dataset_stats.md`, `split_report.md`, `corpus_prep_stats.md` | measured statistics of the corpus and the frozen split |
@@ -22,14 +22,24 @@ This branch keeps five checkpoints, all BiLSTMs:
 
 The project originally also trained sparse baselines (runs 1, 2, 2b), fine-tuned
 embeddings (runs 3u-6u), BERT and BiomedBERT at Stage 1 (runs 7, 8), a softmax tagger
-(run 9) and a BiomedBERT tagger (run 11). **Those rows are still in `runs.csv`, and the
-`figures/*.md` write-ups still discuss them**, because that is the honest record of what
-was measured.
+(run 9) and a BiomedBERT tagger (run 11).
 
-What is *not* here any more: their checkpoints, and the code that trained them. The
-notebooks cover only the models this branch ships. So if you read a score in
-`figures/stage1_results.md` for BiomedBERT at 0.9402, that number was really measured —
-you just cannot reproduce it from this branch without retraining.
+**Their rows have been removed from `runs.csv`**, which now holds only the ten rows the
+notebooks and the demo actually read:
+
+| Rows kept | What they are |
+|---|---|
+| `3`, `4`, `5`, `6` | the four Stage 1 gates of the embedding ablation |
+| `10` | the Stage 2 BiLSTM-CRF tagger |
+| `12c` | the two chained, scored end to end |
+| `13-3` … `13-6` | the same four gates scored on the negation subset |
+
+**The `figures/*.md` write-ups still discuss the removed models**, because they were
+written when those models existed and they are the honest record of what was measured at
+the time. So if you read a score in `figures/stage1_results.md` for BiomedBERT at 0.9402,
+that number was really measured — there is just no row for it in `runs.csv` and no
+checkpoint in `models/` any more, and you cannot reproduce it from this branch without
+retraining. The full log is in git history.
 
 The numbers that *are* reproducible here are recomputed live in the notebooks from the
 saved checkpoints, and they match the log exactly:

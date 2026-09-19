@@ -19,7 +19,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from src.pipeline import (  # noqa: E402
-    DEFAULT_PAIR, EXAMPLES, PAIRS, load_pipeline, logged_scores,
+    EXAMPLES, GATE_RUN, MODEL_LABEL, PIPELINE_RUN, TAGGER_RUN, load_pipeline, logged_scores,
 )
 
 DISCLAIMER = "Research demonstration on published literature; not a clinical or diagnostic tool."
@@ -31,8 +31,8 @@ st.set_page_config(page_title="ADE-Sentinel", page_icon="💊", layout="centered
 
 
 @st.cache_resource(show_spinner="Loading models...")
-def pipeline_for(key: str):
-    return load_pipeline(key)
+def get_pipeline():
+    return load_pipeline()
 
 
 def chip(label: str, text: str) -> str:
@@ -68,21 +68,20 @@ if "text" not in st.session_state:
     st.session_state.text = EXAMPLES[0].text
     st.session_state.example = 0
 
-# ---- sidebar: which models, and how good they measured ------------------------------------
+# ---- sidebar: which model, and how good it measured -----------------------------------------
 with st.sidebar:
-    st.header("Models")
-    key = st.radio("Model pair", list(PAIRS), index=list(PAIRS).index(DEFAULT_PAIR),
-                   format_func=lambda k: PAIRS[k].label, label_visibility="collapsed")
-    pair = PAIRS[key]
-    st.caption(pair.description)
+    st.header("Model")
+    st.markdown(f"**{MODEL_LABEL}**")
+    st.caption("Both checkpoints load in well under a second on CPU, so a cold start is "
+               "mostly Streamlit and torch starting up.")
 
-    scores = logged_scores(pair)
+    scores = logged_scores()
     st.markdown(
         "| Measured on the test split | Score |\n|---|---|\n"
-        f"| Stage 1 gate, run {pair.gate_run} - macro-F1 | {score(scores['stage1'])} |\n"
-        f"| Stage 2 tagger, run {pair.tagger_run} - strict entity-F1 on ADE sentences "
+        f"| Stage 1 gate, run {GATE_RUN} - macro-F1 | {score(scores['stage1'])} |\n"
+        f"| Stage 2 tagger, run {TAGGER_RUN} - strict entity-F1 on ADE sentences "
         f"| {score(scores['stage2'])} |\n"
-        f"| Both chained, run {pair.pipeline_run} - strict entity-F1 on all sentences "
+        f"| Both chained, run {PIPELINE_RUN} - strict entity-F1 on all sentences "
         f"| {score(scores['pipeline'])} |")
     st.caption("Scores are read from `results/runs.csv`. Confidence is the gate's score for its "
                "verdict, not a calibrated probability.")
@@ -108,7 +107,7 @@ if not text.strip():
     st.info("Enter a sentence to analyse.")
     st.stop()
 
-pipeline = pipeline_for(pair.key)
+pipeline = get_pipeline()
 started = time.perf_counter()
 results = pipeline.analyse(text)
 elapsed_ms = (time.perf_counter() - started) * 1000
@@ -125,9 +124,10 @@ for result in results:
         elif not result.entities:
             st.caption("The gate accepted this sentence, but Stage 2 marked no drug or effect.")
         if result.truncated:
-            st.caption("This sentence is longer than a model's input limit, so its end went unread.")
+            st.caption("This sentence is longer than the model's input limit, so its end went "
+                       "unread.")
 
 count = f"{len(results)} sentence{'s' if len(results) != 1 else ''}"
 st.markdown(f'<div style="font-size: 0.85rem; opacity: 0.75;">{chip("DRUG", "drug")} &nbsp; '
-            f'{chip("EFFECT", "effect")} &nbsp; - {count} analysed in {elapsed_ms:.0f} ms '
-            f'with {html.escape(pair.label)}</div>', unsafe_allow_html=True)
+            f'{chip("EFFECT", "effect")} &nbsp; - {count} analysed in {elapsed_ms:.0f} ms</div>',
+            unsafe_allow_html=True)

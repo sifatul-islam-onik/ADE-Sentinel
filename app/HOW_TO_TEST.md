@@ -130,23 +130,25 @@ Keep the little word in front when there is one ("a rash", "a headache").
   sentence in one box.
 - **A single sentence** can be all lowercase or miss the full stop. That is fine.
 
-## Phrasings that fool the default model
+## Phrasings that fool the model
 
-The demo starts with the faster model. The sentences below often trip it up. To compare, go to
-the **left sidebar** and, under **Models**, pick **BiomedBERT gate + BiomedBERT tagger**. It
-takes several seconds to load the first time. It handles these much better, which is a good way
-to see the difference between the two models.
+These are known weaknesses, not bugs. The model learned from medical case reports, which are
+written in formal clinical language, so everyday phrasing throws it.
 
-| Try | Default model | BiomedBERT |
-|---|---|---|
-| `I got diarrhea after taking aspirin.` | highlights "got diarrhea" instead of "diarrhea" | correct |
-| `Aspirin gave me nausea.` | also marks "me" as a medicine | correct |
-| `Morphine did not cause nausea.` | wrongly says ADE | correct |
-| `She took aspirin and had no nausea.` | wrongly says ADE | correct |
-| `He takes aspirin for pain.` | wrongly says ADE | correct |
+| Try | What it gets wrong |
+|---|---|
+| `I got diarrhea after taking aspirin.` | highlights "got diarrhea" instead of just "diarrhea" |
+| `Aspirin gave me nausea.` | also marks "me" as a medicine |
+| `Morphine did not cause nausea.` | wrongly says ADE |
+| `She took aspirin and had no nausea.` | wrongly says ADE |
+| `He takes aspirin for pain.` | wrongly says ADE |
 
-To avoid these problems with the default model, say "developed" or "had" instead of "got" or
-"gave me", and say "did not get" instead of "did not cause".
+The last three are all the same underlying problem: **negation**. The model sees a drug and a
+symptom close together and says "adverse drug event", even when the sentence says the opposite.
+Notebook 6 measures how much that costs.
+
+To stay inside what it handles well, write the way a case report would: say "developed" or
+"had" rather than "got" or "gave me", and "did not get" rather than "did not cause".
 
 ## If something looks wrong
 

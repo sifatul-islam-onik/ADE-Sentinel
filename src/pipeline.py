@@ -1,11 +1,16 @@
 """The two-stage pipeline, applied live to any text. This is what the demo runs.
 
     from src.pipeline import load_pipeline
-    pipeline = load_pipeline("bilstm")
+    pipeline = load_pipeline()
     for s in pipeline.analyse("Hepatotoxicity developed after isoniazid."):
         print(s.is_ade, s.confidence, s.entities)
 
-The rules are the ones the reported end-to-end numbers were measured under:
+Two saved BiLSTM checkpoints, both on CPU:
+
+    Stage 1 gate   run 6   BiLSTM + attention on the E3 (FastText) matrix
+    Stage 2 tagger run 10  BiLSTM + CRF on the same matrix
+
+The rules below are the ones the reported numbers were measured under:
 
 * the gate's decision is the argmax (not a 0.5 threshold), and its confidence is
   the softmax probability of the class it chose;
@@ -14,8 +19,7 @@ The rules are the ones the reported end-to-end numbers were measured under:
   would have counted.
 
 Text goes through the project tokenizer and the punctuation filter, with
-character offsets kept, so entities can be painted back onto the original
-string. CPU only - torch and transformers are imported inside the model classes.
+character offsets kept, so entities can be painted back onto the original string.
 """
 
 from __future__ import annotations
@@ -32,42 +36,22 @@ MODELS = REPO_ROOT / "models"
 MATRICES = MODELS / "emb_matrices"
 
 # Input limits the saved checkpoints were trained and scored under.
-GATE_BILSTM_MAX_LEN = 96
-GATE_BERT_MAX_LEN = 128
-TAGGER_BILSTM_MAX_LEN = 96
-TAGGER_BERT_MAX_LEN = 192
+GATE_MAX_LEN = 96
+TAGGER_MAX_LEN = 96
 
-
-@dataclass(frozen=True)
-class Pair:
-    """A Stage 1 gate and a Stage 2 tagger the demo can load together."""
-
-    key: str
-    label: str
-    gate_run: str
-    tagger_run: str
-    pipeline_run: str       # the runs.csv row scoring this exact pair end to end
-    description: str
-
-
-PAIRS = {
-    "bilstm": Pair(
-        "bilstm", "BiLSTM gate + BiLSTM-CRF tagger", "6", "10", "12c",
-        "Both checkpoints load in well under a second on CPU, so a cold start is "
-        "mostly Streamlit and torch starting up."),
-    "biomedbert": Pair(
-        "biomedbert", "BiomedBERT gate + BiomedBERT tagger", "8", "11", "12",
-        "The most accurate pair. Two 420 MB checkpoints take several seconds to "
-        "load, so it is loaded only when selected."),
-}
-DEFAULT_PAIR = "bilstm"
+# Which logged runs these checkpoints are, for reading their scores back out of
+# results/runs.csv.
+GATE_RUN = "6"          # BiLSTM + attention, E3 embeddings
+TAGGER_RUN = "10"       # BiLSTM + CRF, E3 embeddings
+PIPELINE_RUN = "12c"    # the two of them chained, scored end to end
+MODEL_LABEL = "BiLSTM gate + BiLSTM-CRF tagger"
 
 
 @dataclass(frozen=True)
 class Example:
     """A preloaded sentence. All five are held-out Stage 1 test sentences.
 
-    Chosen to show one behaviour each, from sentences the default pair handles
+    Chosen to show one behaviour each, from sentences the model handles
     correctly - they illustrate the pipeline rather than measure it.
     `test_index` is the row in `data/splits/stage1_test.parquet`.
     """
@@ -105,8 +89,8 @@ EXAMPLES = (
 )
 
 
-def logged_scores(pair: Pair, runs_csv: Path | None = None) -> dict:
-    """The pair's test scores from `results/runs.csv`, None where not logged.
+def logged_scores(runs_csv: Path | None = None) -> dict:
+    """The model's test scores from `results/runs.csv`, None where not logged.
 
     stage1: macro-F1 of the gate. stage2: strict entity-F1 of the tagger on gold
     ADE sentences. pipeline: strict entity-F1 of the two chained, on every test
@@ -125,9 +109,9 @@ def logged_scores(pair: Pair, runs_csv: Path | None = None) -> dict:
         value = latest.get(run_id, {}).get(column, "")
         return float(value) if value else None
 
-    return {"stage1": number(pair.gate_run, "macro_f1"),
-            "stage2": number(pair.tagger_run, "entity_f1_strict"),
-            "pipeline": number(pair.pipeline_run, "entity_f1_strict")}
+    return {"stage1": number(GATE_RUN, "macro_f1"),
+            "stage2": number(TAGGER_RUN, "entity_f1_strict"),
+            "pipeline": number(PIPELINE_RUN, "entity_f1_strict")}
 
 
 # --------------------------------------------------------------------------
@@ -184,8 +168,8 @@ def entities_from_tags(text: str, offsets, tags: list[str]) -> list[Entity]:
 class Pipeline:
     """Gate, then tagger - on each sentence of the input, in order."""
 
-    def __init__(self, gate, tagger, pair: Pair | None = None):
-        self.gate, self.tagger, self.pair = gate, tagger, pair
+    def __init__(self, gate, tagger):
+        self.gate, self.tagger = gate, tagger
 
     def analyse(self, text: str) -> list[SentenceResult]:
         sentences = sentence_split(text)
@@ -204,27 +188,11 @@ class Pipeline:
         for i, (sentence, (p_ade, is_ade)) in enumerate(zip(sentences, decisions)):
             sentence_words, offsets = words[i]
             entities = entities_from_tags(sentence, offsets, tagged[i]) if i in tagged else []
-            truncated = (_exceeds(self.gate, sentence, sentence_words)
-                         or (is_ade and _exceeds(self.tagger, sentence, sentence_words)))
+            # Both models count words, so one length check covers them.
+            truncated = len(sentence_words) > max(self.gate.max_len, self.tagger.max_len)
             results.append(SentenceResult(sentence, float(p_ade), bool(is_ade), entities,
                                           truncated))
         return results
-
-
-def _exceeds(model, sentence: str, words: list[str]) -> bool:
-    """Whether a sentence is longer than the model's input limit.
-
-    BERT limits count subwords with special tokens; BiLSTM limits count words.
-    """
-    limit = getattr(model, "max_len", None)
-    if limit is None:
-        return False
-    tokenizer = getattr(model, "tokenizer", None)
-    if tokenizer is None:
-        return len(words) > limit
-    if hasattr(model, "tag"):      # a tagger reads pre-split words
-        return bool(words) and len(tokenizer(words, is_split_into_words=True)["input_ids"]) > limit
-    return len(tokenizer(sentence)["input_ids"]) > limit
 
 
 def _decisions(torch, logits) -> list[tuple[float, bool]]:
@@ -235,13 +203,13 @@ def _decisions(torch, logits) -> list[tuple[float, bool]]:
 
 
 # --------------------------------------------------------------------------
-# Stage 1 gates
+# Stage 1: the gate
 # --------------------------------------------------------------------------
 
 class BiLSTMGate:
     """A saved run 3-6 checkpoint, rebuilt against its frozen embedding matrix."""
 
-    def __init__(self, checkpoint, matrices=MATRICES, *, max_len: int = GATE_BILSTM_MAX_LEN,
+    def __init__(self, checkpoint, matrices=MATRICES, *, max_len: int = GATE_MAX_LEN,
                  batch_size: int = 64):
         import numpy as np
         import torch
@@ -278,39 +246,14 @@ class BiLSTMGate:
         return out
 
 
-class BertGate:
-    """A saved run 7-8 sequence-classification checkpoint."""
-
-    def __init__(self, path, *, max_len: int = GATE_BERT_MAX_LEN, batch_size: int = 32):
-        import torch
-        from transformers import AutoModelForSequenceClassification, AutoTokenizer
-
-        self._torch = torch
-        self.tokenizer = AutoTokenizer.from_pretrained(path)
-        self.model = AutoModelForSequenceClassification.from_pretrained(path)
-        self.model.eval()
-        self.max_len, self.batch_size = max_len, batch_size
-
-    def classify(self, sentences: list[str]) -> list[tuple[float, bool]]:
-        torch = self._torch
-        out = []
-        for start in range(0, len(sentences), self.batch_size):
-            encoded = self.tokenizer(sentences[start:start + self.batch_size], truncation=True,
-                                     max_length=self.max_len, padding=True, return_tensors="pt")
-            with torch.no_grad():
-                logits = self.model(**encoded).logits
-            out += _decisions(torch, logits)
-        return out
-
-
 # --------------------------------------------------------------------------
-# Stage 2 taggers
+# Stage 2: the tagger
 # --------------------------------------------------------------------------
 
 class BiLSTMTaggerRunner:
-    """A saved run 9/10 checkpoint, rebuilt against the frozen embedding matrix."""
+    """A saved run 10 checkpoint, rebuilt against the frozen embedding matrix."""
 
-    def __init__(self, checkpoint, matrices=MATRICES, *, max_len: int = TAGGER_BILSTM_MAX_LEN,
+    def __init__(self, checkpoint, matrices=MATRICES, *, max_len: int = TAGGER_MAX_LEN,
                  batch_size: int = 64):
         import numpy as np
         import torch
@@ -358,83 +301,27 @@ class BiLSTMTaggerRunner:
         return out
 
 
-class BertTagger:
-    """A token-classification checkpoint, read back at word level.
-
-    Each word's tag is taken from its first subword, and words past the subword
-    budget are tagged `O` - exactly how run 11 was scored, so the entity counts
-    stay comparable with the BiLSTM taggers'.
-    """
-
-    def __init__(self, name_or_path, *, max_len: int = TAGGER_BERT_MAX_LEN,
-                 batch_size: int = 32):
-        import torch
-        from transformers import AutoModelForTokenClassification, AutoTokenizer
-
-        self._torch = torch
-        self.tokenizer = AutoTokenizer.from_pretrained(name_or_path)
-        self.model = AutoModelForTokenClassification.from_pretrained(name_or_path)
-        self.model.eval()
-        self.max_len, self.batch_size = max_len, batch_size
-
-        id2label = self.model.config.id2label
-        self.labels = [id2label[i] for i in range(len(id2label))]
-
-    def tag(self, sentences: list[list[str]]) -> list[list[str]]:
-        out: list[list[str]] = []
-        for start in range(0, len(sentences), self.batch_size):
-            chunk = sentences[start:start + self.batch_size]
-            tagged = iter(self._tag_batch([s for s in chunk if s]) if any(chunk) else [])
-            out.extend(next(tagged) if words else [] for words in chunk)
-        return out
-
-    def _tag_batch(self, chunk: list[list[str]]) -> list[list[str]]:
-        encoded = self.tokenizer(chunk, is_split_into_words=True, truncation=True,
-                                 max_length=self.max_len, padding=True, return_tensors="pt")
-        with self._torch.no_grad():
-            best = self.model(**encoded).logits.argmax(-1).tolist()
-
-        results = []
-        for i, words in enumerate(chunk):
-            by_word, previous = {}, None
-            for position, word_id in enumerate(encoded.word_ids(batch_index=i)):
-                if word_id is not None and word_id != previous:
-                    by_word[word_id] = self.labels[best[i][position]]
-                previous = word_id
-            results.append([by_word.get(w, "O") for w in range(len(words))])
-        return results
-
-
 # --------------------------------------------------------------------------
 # Loading
 # --------------------------------------------------------------------------
 
-def _quiet_transformers() -> None:
-    """transformers draws a progress bar per weight while loading - noise in a log."""
-    from transformers.utils import logging as hf_logging
-    hf_logging.disable_progress_bar()
+def load_gate(run_id: str = GATE_RUN):
+    """One of the four ablation checkpoints. Run 6 (E3) is the one the demo uses."""
+    folder = {"3": "run3_E0_random", "4": "run4_E1",
+              "5": "run5_E2", "6": "run6_E3"}.get(run_id)
+    if folder is None:
+        raise ValueError(f"no checkpoint for Stage 1 run {run_id} - this project "
+                         f"ships runs 3, 4, 5 and 6")
+    return BiLSTMGate(MODELS / "stage1" / folder / "checkpoint.pt")
 
 
-def load_gate(run_id: str):
-    if run_id == "6":
-        return BiLSTMGate(MODELS / "stage1" / "run6_E3" / "checkpoint.pt")
-    if run_id == "8":
-        _quiet_transformers()
-        return BertGate(MODELS / "stage1" / "run8_biomedbert" / "best")
-    raise ValueError(f"no demo loader for Stage 1 run {run_id}")
+def load_tagger(run_id: str = TAGGER_RUN):
+    if run_id != "10":
+        raise ValueError(f"no checkpoint for Stage 2 run {run_id} - this project "
+                         f"ships run 10, the BiLSTM-CRF tagger")
+    return BiLSTMTaggerRunner(MODELS / "stage2" / "run10_crf" / "checkpoint.pt")
 
 
-def load_tagger(run_id: str):
-    if run_id == "9":
-        return BiLSTMTaggerRunner(MODELS / "stage2" / "run9_softmax" / "checkpoint.pt")
-    if run_id == "10":
-        return BiLSTMTaggerRunner(MODELS / "stage2" / "run10_crf" / "checkpoint.pt")
-    if run_id == "11":
-        _quiet_transformers()
-        return BertTagger(MODELS / "stage2" / "run11_biomedbert" / "best")
-    raise ValueError(f"no demo loader for Stage 2 run {run_id}")
-
-
-def load_pipeline(key: str = DEFAULT_PAIR) -> Pipeline:
-    pair = PAIRS[key]
-    return Pipeline(load_gate(pair.gate_run), load_tagger(pair.tagger_run), pair)
+def load_pipeline() -> Pipeline:
+    """The demo's pipeline: run 6 gate, run 10 tagger, both on CPU."""
+    return Pipeline(load_gate(), load_tagger())

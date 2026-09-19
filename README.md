@@ -69,8 +69,8 @@ loops, not a summary — behind a `TRAIN = False` switch in notebooks 3, 4 and 5
 | 1 | [Data collection](notebooks/01_data_collection.ipynb) | the labelled ADE corpus, and 159,975 PubMed abstracts |
 | 2 | [Preprocessing](notebooks/02_preprocessing.ipynb) | the domain tokenizer, sentence splitting, character spans → BIO tags |
 | 3 | [Embeddings](notebooks/03_embeddings.ipynb) | **the headline experiment** — training E2/E3 and building the four matrices |
-| 4 | [Stage 1](notebooks/04_stage1_classification.ipynb) | eight classifiers, the embedding ablation, frozen vs fine-tuned |
-| 5 | [Stage 2](notebooks/05_stage2_tagging.ipynb) | three taggers, and what a CRF actually buys |
+| 4 | [Stage 1](notebooks/04_stage1_classification.ipynb) | **the embedding ablation** — one network, four sets of starting vectors |
+| 5 | [Stage 2](notebooks/05_stage2_tagging.ipynb) | the BiLSTM-CRF tagger, and what the CRF actually buys |
 | 6 | [Pipeline and demo](notebooks/06_pipeline_and_demo.ipynb) | chaining the stages, error propagation, negation, the live demo |
 
 ### Retraining, if anyone asks
@@ -96,10 +96,9 @@ and is what the project actually claims.
 | | |
 |---|---|
 | Embedding ablation, Stage 1 macro-F1 | 0.744 (random) → **0.879** (our FastText) |
-| Best Stage 1 model | BiomedBERT, **0.940** macro-F1 |
-| Best Stage 2 tagger | BiomedBERT, **0.905** strict entity-F1 |
-| CRF effect on malformed tag sequences | 82 → **5** |
-| Both stages chained end to end | **0.833** strict entity-F1 |
+| Stage 2 tagger, strict entity-F1 on gold ADE sentences | **0.831** |
+| Structurally impossible tag sequences the CRF still emits | **5** in 640 sentences |
+| Both stages chained end to end | **0.689** strict entity-F1 |
 
 Every number above is logged in [results/runs.csv](results/runs.csv), one row per
 experiment, and the notebooks read it from there rather than quoting it by hand.
@@ -116,6 +115,15 @@ data/splits/ the frozen train/dev/test files - generated once, never regenerated
 models/      trained embeddings and checkpoints (not in git; large)
 results/     runs.csv, figures and measured statistics
 ```
+
+Five checkpoints are kept, all BiLSTMs: the four Stage 1 gates the ablation compares
+(`run3_E0_random`, `run4_E1`, `run5_E2`, `run6_E3`) and the Stage 2 tagger
+(`run10_crf`). The demo loads run 6 and run 10.
+
+Earlier versions of this project also trained sparse baselines and BiomedBERT models at
+both stages. Their scores are still in `results/runs.csv` as the historical record, but
+the checkpoints and the code that trained them are not in this branch — see
+[results/README.md](results/README.md).
 
 `src/` is eight files:
 

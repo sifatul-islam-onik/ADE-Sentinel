@@ -9,9 +9,8 @@ load E0/E1/E2/E3 into the *same* code with the *same* hyperparameters and the
 *same* seed, so any difference in the score comes from the vectors and nothing
 else.
 
-The transformer models (runs 7, 8, 11) are not here - they are `transformers`
-one-liners, `AutoModelForSequenceClassification` and
-`AutoModelForTokenClassification`, and notebook 04 shows the call.
+Both are trained in the notebooks - notebook 4 for the classifier, notebook 5
+for the tagger - behind a `TRAIN` switch that is off by default.
 """
 
 from __future__ import annotations
@@ -59,8 +58,8 @@ class BiLSTMClassifier(nn.Module):
     positions matches the label better than one that averages 18 words.
 
     `freeze_embeddings=True` means the matrix gets no gradient, so the run
-    measures the pretrained vectors themselves. Setting it False is the "u"
-    (unfrozen) condition - notebook 04 reports both.
+    measures the pretrained vectors themselves rather than what the task can
+    teach them. All four ablation runs use it.
     """
 
     def __init__(
@@ -131,15 +130,14 @@ class BiLSTMClassifier(nn.Module):
 class BiLSTMTagger(nn.Module):
     """Stage 2: the same encoder, one output per word, optionally a CRF on top.
 
-    Runs 9 and 10 are this class with the same matrix, hyperparameters and seed;
-    `use_crf` is the only difference between them.
+    Run 10, the tagger the demo uses, is this class with `use_crf=True`.
 
     What the CRF is for: a per-word softmax decides each position independently,
     so nothing stops it emitting `I-DRUG` straight after `O` - a sequence that
     cannot be an entity. A CRF learns transition scores and decodes with
     Viterbi, so those paths become very unlikely. Note "unlikely", not
-    "impossible": the constraint is learned from data, and notebook 05 shows the
-    count dropping from 82 to 5, not to 0.
+    "impossible": the constraint is learned from the data rather than imposed by
+    the architecture, and run 10 still emits 5 of them over the test split.
     """
 
     def __init__(

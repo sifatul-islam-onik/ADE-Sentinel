@@ -250,10 +250,99 @@ def entity_prf(gold_sets, pred_sets) -> tuple[float, float, float]:
 
 
 def entity_f1(y_true: list[list[str]], y_pred: list[list[str]]) -> dict:
-    """Strict entity P/R/F1 over lists of tag sequences."""
+    """Strict entity P/R/F1 over lists of tag sequences. The short version."""
     gold = [strict_entities(t) for t in y_true]
     pred = [strict_entities(p) for p in y_pred]
     precision, recall, f1 = entity_prf(gold, pred)
     return {"precision": precision, "recall": recall, "f1": f1,
             "gold_entities": sum(len(g) for g in gold),
             "predicted_entities": sum(len(p) for p in pred)}
+
+
+def per_label_scores(y_true, y_pred, labels=ENTITY_LABELS) -> dict:
+    """Strict scores split by entity type, so DRUG and EFFECT can be compared."""
+    metrics = {}
+    for label in labels:
+        gold = [[e for e in strict_entities(s) if e[2] == label] for s in y_true]
+        pred = [[e for e in strict_entities(s) if e[2] == label] for s in y_pred]
+        p, r, f1 = entity_prf(gold, pred)
+        key = label.lower()
+        metrics[f"{key}_precision"] = p
+        metrics[f"{key}_recall"] = r
+        metrics[f"{key}_f1"] = f1
+        metrics[f"{key}_support"] = sum(len(s) for s in gold)
+    return metrics
+
+
+def illegal_transition_stats(sequences: list[list[str]]) -> dict:
+    """How often a model emitted a structurally impossible tag.
+
+    Three numbers because they answer different questions: the raw count scales
+    with corpus size, the rate is what a reader can picture, and the affected
+    sentence count says whether the problem is concentrated or spread out.
+    """
+    counts = [count_illegal_transitions(seq) for seq in sequences]
+    return {
+        "illegal_transitions": sum(counts),
+        "illegal_sentences": sum(1 for c in counts if c),
+        "illegal_sentence_rate": (sum(1 for c in counts if c) / len(sequences)
+                                  if sequences else 0.0),
+    }
+
+
+def token_accuracy(y_true: list[list[str]], y_pred: list[list[str]]) -> float:
+    """Reported but deprecated, exactly as accuracy is in Stage 1.
+
+    `O` is about 79% of tokens, so a model predicting nothing at all scores
+    ~0.79. It is in the table only to be argued against.
+    """
+    correct = total = 0
+    for gold, pred in zip(y_true, y_pred):
+        for g, p in zip(gold, pred):
+            correct += g == p
+            total += 1
+    return correct / total if total else 0.0
+
+
+def entity_metrics(y_true: list[list[str]], y_pred: list[list[str]]) -> dict:
+    """Every Stage 2 metric in one flat dict, ready for `log_run(metrics=...)`.
+
+    Both scoring modes, because they answer different questions:
+
+    * **strict** - only a `B-X` may open an entity. `O I-DRUG` scores nothing.
+      This is the headline.
+    * **lenient** - a malformed run is repaired into an entity first, then
+      scored. The two differ by exactly the repaired entities, one per illegal
+      transition, which is why `illegal_transitions` is reported beside them.
+
+    Lenient is easily mistaken for a partial-match score. It is not: boundaries
+    must still be exact in both modes.
+    """
+    if len(y_true) != len(y_pred):
+        raise ValueError(f"{len(y_true)} gold sequences vs {len(y_pred)} predicted")
+    for i, (gold, pred) in enumerate(zip(y_true, y_pred)):
+        if len(gold) != len(pred):
+            raise ValueError(
+                f"sentence {i}: {len(gold)} gold tags vs {len(pred)} predicted. "
+                "Padding was probably not trimmed before scoring.")
+
+    gold_strict = [strict_entities(s) for s in y_true]
+    pred_strict = [strict_entities(s) for s in y_pred]
+    gold_lenient = [bio_to_entities([""] * len(s), s) for s in y_true]
+    pred_lenient = [bio_to_entities([""] * len(s), s) for s in y_pred]
+
+    sp, sr, sf = entity_prf(gold_strict, pred_strict)
+    lp, lr, lf = entity_prf(gold_lenient, pred_lenient)
+
+    metrics = {
+        "entity_precision_strict": sp, "entity_recall_strict": sr,
+        "entity_f1_strict": sf,
+        "entity_precision_lenient": lp, "entity_recall_lenient": lr,
+        "entity_f1_lenient": lf,
+        "strict_lenient_gap": lf - sf,
+        "gold_entities": sum(len(g) for g in gold_lenient),
+        "pred_entities": sum(len(p) for p in pred_lenient),
+    }
+    metrics.update(per_label_scores(y_true, y_pred))
+    metrics.update(illegal_transition_stats(y_pred))
+    return metrics

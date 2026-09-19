@@ -59,11 +59,68 @@ def nearest(kv, word: str, k: int = 5, block: int = 20_000) -> list[tuple[str, f
             if kv.index_to_key[i] != word][:k]
 
 
-def covers(kv, word: str) -> bool:
-    """Whether the embedding has a vector for `word`.
+def lookup_key(word: str, kv, case_fallback: bool = True) -> str | None:
+    """Resolve `word` against `kv`, retrying case-folded. None if absent.
 
-    A case-folded retry is allowed because GloVe is an uncased release. Without
-    it, GloVe would be penalised for *our* choice to protect medical
-    abbreviations from lowercasing (`HIV` stays `HIV`, GloVe holds `hiv`).
+    **Why the retry is not optional.** Our tokenizer deliberately protects
+    medical abbreviations from lowercasing, so `HIV`, `CT` and `AML` stay
+    uppercase. `glove.6B` is an UNCASED release holding `hiv`, `ct`, `aml`.
+    Comparing the two without a case-folded retry counts those as GloVe
+    failures when they are really artefacts of *our* preprocessing — which
+    would inflate GloVe's miss rate and flatter the domain vectors.
+
+    The project's headline claim has to survive a hostile reading, so the
+    baseline is measured at its strongest fair version.
     """
-    return word in kv or word.lower() in kv
+    if word in kv:
+        return word
+    if case_fallback:
+        lowered = word.lower()
+        if lowered != word and lowered in kv:
+            return lowered
+    return None
+
+
+def covers(kv, word: str) -> bool:
+    """Whether the embedding has a vector for `word`, case-folding allowed."""
+    return lookup_key(word, kv) is not None
+
+
+def task_token_counts(texts) -> "Counter[str]":
+    """Word frequencies over the task corpus, using the project's tokenizer.
+
+    Must be the same tokenizer the supervised models use, or coverage is
+    measured against words that never reach an embedding lookup at all.
+    """
+    from collections import Counter
+
+    from src.tokenizer import tokenize
+    from src.vocab import is_indexable
+
+    counts: Counter[str] = Counter()
+    for text in texts:
+        tokens, _ = tokenize(text)
+        counts.update(t for t in tokens if is_indexable(t))
+    return counts
+
+
+def build_matrix(index: dict[str, int], base, kv, skip: tuple[str, ...] = ()):
+    """Fill a copy of `base` with vectors from `kv`. Returns (matrix, rows filled).
+
+    `base` is shared across every representation on purpose. Drawing fresh noise
+    per matrix would leave E1's uncovered rows and E2's uncovered rows holding
+    DIFFERENT random values, so part of any downstream F1 difference would be
+    that noise rather than the embeddings. Copying one seeded base keeps
+    uncovered rows byte-identical, which is what makes runs 3-6 a clean
+    single-variable ablation.
+    """
+    matrix = base.copy()
+    hits = 0
+    for word, row in index.items():
+        if word in skip:
+            continue
+        key = lookup_key(word, kv)
+        if key is not None:
+            matrix[row] = kv[key]
+            hits += 1
+    return matrix, hits

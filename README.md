@@ -56,8 +56,13 @@ reader.
 ## The notebooks
 
 Read them in order. **Every one has its outputs saved**, so you can read the whole project
-without running anything. Nothing retrains: the models in `models/` are already trained,
-and the cells that do run load them and score them on the frozen test split in seconds.
+without running anything. Nothing retrains by default: the models in `models/` are already
+trained, and the cells that run load them and score them on the frozen test split in
+seconds.
+
+The notebooks also **contain the training code that produced those models** — the real
+loops, not a summary — behind a `TRAIN = False` switch in notebooks 3, 4 and 5. Flip it to
+`True` in a Kaggle GPU session to retrain from scratch.
 
 | | Notebook | What it covers |
 |---|---|---|
@@ -68,9 +73,21 @@ and the cells that do run load them and score them on the frozen test split in s
 | 5 | [Stage 2](notebooks/05_stage2_tagging.ipynb) | three taggers, and what a CRF actually buys |
 | 6 | [Pipeline and demo](notebooks/06_pipeline_and_demo.ipynb) | chaining the stages, error propagation, negation, the live demo |
 
-Training itself ran on Kaggle GPUs. The training code appears in the notebooks as
-annotated code blocks rather than runnable cells — it needs a GPU and a few hours, and the
-finished checkpoints are already here.
+### Retraining, if anyone asks
+
+Training ran on Kaggle GPUs and takes a few hours. To repeat it: start a GPU session,
+attach this repo plus a Dataset holding `models/emb_matrices/*.npy` (57 MB, gitignored),
+set `TRAIN = True`, and run all. Kaggle discards `/kaggle/working` when the session ends,
+so download `models/` and `results/runs.csv` before it does.
+
+Every run appends its own row to `results/runs.csv` through `log_run`, capturing the score,
+the hyperparameters, the seed, the GPU count and the git commit — which is why no number in
+this project was ever transcribed by hand.
+
+`set_seed(42)` fixes every RNG and sets `cudnn.deterministic`, so the same code on the same
+GPU should land on the same figures. A different GPU or cuDNN version can move the last
+decimal place; the ablation *ordering* (E0 < E1 < E2 < E3) is a far larger effect than that
+and is what the project actually claims.
 
 ---
 
@@ -100,15 +117,17 @@ models/      trained embeddings and checkpoints (not in git; large)
 results/     runs.csv, figures and measured statistics
 ```
 
-`src/` is six files:
+`src/` is eight files:
 
 | File | Contents |
 |---|---|
 | `tokenizer.py` | word and sentence splitting for medical text |
 | `vocab.py` | words → integer ids, against the one frozen vocabulary |
 | `bio.py` | character spans ↔ BIO tags, and entity-level scoring |
+| `metrics.py` | Stage 1 scoring — macro-F1, per-class, PR-AUC |
 | `models.py` | the BiLSTM classifier and the BiLSTM(-CRF) tagger |
-| `embeddings.py` | loading and inspecting the trained word vectors |
+| `embeddings.py` | loading, inspecting and aligning the trained word vectors |
+| `utils.py` | `set_seed` and `log_run` — the reproducibility spine |
 | `pipeline.py` | both stages chained, applied live to any text — what the demo runs |
 
 ---

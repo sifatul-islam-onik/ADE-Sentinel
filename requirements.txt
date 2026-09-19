@@ -1,0 +1,29 @@
+# ADE-Sentinel - everything needed to read the notebooks and run the demo.
+#
+#   python -m venv .venv
+#   .venv\Scripts\python -m pip install -r requirements.txt ^
+#       --extra-index-url https://download.pytorch.org/whl/cpu
+#
+# The CPU build of torch is enough: nothing here retrains, it only loads the
+# saved checkpoints and scores them. Training ran on Kaggle GPUs.
+
+# data
+pandas==2.3.3
+pyarrow==25.0.1
+numpy==2.2.6
+
+# models
+torch==2.14.0
+transformers==5.0.0
+pytorch-crf==0.7.2
+scikit-learn==1.7.2
+
+# word embeddings (notebook 3)
+gensim==4.4.0
+
+# notebooks and figures
+ipykernel==7.3.0
+matplotlib==3.10.9
+
+# the demo
+streamlit==1.63.0

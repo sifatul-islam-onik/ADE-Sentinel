@@ -3,10 +3,9 @@ __pycache__/
 *.py[cod]
 .venv/
 venv/
-.pytest_cache/
-*.egg-info/
+.ipynb_checkpoints/
 
-# --- Large artefacts: these live in the versioned Kaggle Dataset, not git (PLAN F7) ---
+# --- Large artefacts: trained models and raw corpora are not in git ---
 data/raw/*
 !data/raw/.gitkeep
 data/interim/*
@@ -14,32 +13,27 @@ data/interim/*
 *.jsonl
 *.bin
 *.kv
-*.kv.vectors.npy
 *.npy
 *.pt
 *.ckpt
 *.safetensors
-# Top-level artefact dir only; src/models/ is code.
-# NOTE: no trailing comment on the pattern line - '#' only starts a
-# comment at the START of a line, so an inline one becomes part of the
-# pattern and silently matches nothing.
+
+# The top-level artefact dir only. NOTE: no trailing comment on the pattern
+# line - '#' only starts a comment at the START of a line, so an inline one
+# becomes part of the pattern and silently matches nothing.
 /models/
 !/models/emb_matrices/vocab.json
 
-# --- Frozen splits ARE committed on purpose (PLAN F7). Do not ignore data/splits/. ---
-
-# --- Local noise ---
-.ipynb_checkpoints/
-.DS_Store
-Thumbs.db
-kaggle.json
-.env
-# Word lock files, created whenever report/*.docx is open
-~$*
-
-# Staging dir built by scripts/push_to_kaggle.py
-data/.kaggle_staging/
+# --- data/splits/ IS committed on purpose. Do not ignore it. ---
 
 # Derived corpora: large, regenerable from data/pubmed_corpus.jsonl
 data/pubmed_sentences.txt
 *.txt.gz
+
+# --- Local noise ---
+.DS_Store
+Thumbs.db
+kaggle.json
+.env
+# Word lock files, created whenever a .docx is open
+~$*

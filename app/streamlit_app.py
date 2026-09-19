@@ -1,9 +1,8 @@
-"""ADE-Sentinel demo (Phase 7): verdict, confidence and highlighted spans for any text.
+"""The ADE-Sentinel demo: verdict, confidence and highlighted spans for any text.
 
     .venv\\Scripts\\python -m streamlit run app\\streamlit_app.py
 
-Layout only - every model decision is made in `src/demo_pipeline.py`, which
-`scripts/check_demo.py` checks against the logged runs and times.
+This file is layout only. Every model decision is made in `src/pipeline.py`.
 """
 
 from __future__ import annotations
@@ -19,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.demo_pipeline import (  # noqa: E402
+from src.pipeline import (  # noqa: E402
     DEFAULT_PAIR, EXAMPLES, PAIRS, load_pipeline, logged_scores,
 )
 
